@@ -1,9 +1,32 @@
+"use client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage() {
+  const [form, setForm] = useState({ username: "", password: "" });
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(form),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem("token", data.token);
+      router.push("/dashboard");
+    } else {
+      alert(data.error);
+    }
+  };
+
   return (
     <div className="bg-slate-100 h-screen w-screen relative flex justify-center items-center">
       <div className="relative grid h-5/6 w-9/12 grid-cols-1 md:grid-cols-2 lg:grid-cols-2 shadow-lg ">
@@ -18,15 +41,19 @@ export default function LoginPage() {
               <p className="text-gray-500">Please log in to continue</p>
             </div>
 
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <Label htmlFor="email">Username</Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
                   placeholder="jdoe"
                   required
                   type="text"
                   className="w-full"
+                  value={form.username}
+                  onChange={(e) =>
+                    setForm({ ...form, username: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -36,6 +63,10 @@ export default function LoginPage() {
                   required
                   type="password"
                   className="w-full"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
                 />
                 <p className="text-xs text-gray-500">
                   It must be a combination of minimum 8 uppercase and lowercase

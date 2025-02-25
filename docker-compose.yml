@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres
+    container_name: postgres-2
+    restart: always
+    environment:
+      POSTGRES_USER: jupiter
+      POSTGRES_PASSWORD: jupiterSpring2025
+      POSTGRES_DB: cs5392database
+    ports:
+      - "5432:5432"
