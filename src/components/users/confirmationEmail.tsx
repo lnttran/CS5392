@@ -77,8 +77,8 @@ export function ConfirmEmail({
             <Text
               style={{ fontSize: "14px", color: "#555", marginTop: "20px" }}
             >
-              Your new password must be a combination of minimum 8 uppercase and
-              lowercase letters, numbers, and symbols
+              Your new password must be a combination of minimum 6 uppercase and
+              lowercase letters, numbers, and special characters #, $, %, &
             </Text>
           </Section>
         </Container>

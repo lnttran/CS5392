@@ -31,5 +31,5 @@ model User {
   lastName      String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  loginFirstTime Boolean @default(false)
+  loginFirstTime Boolean @default(true)
 }

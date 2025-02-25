@@ -21,7 +21,11 @@ export default function LoginPage() {
     const data = await res.json();
     if (data.token) {
       localStorage.setItem("token", data.token);
-      router.push("/dashboard");
+      if (data.loginFirstTime) {
+        router.push("/authentication/reset-password"); // Redirect to password reset page
+      } else {
+        router.push("/dashboard"); // Redirect to dashboard if not first login
+      }
     } else {
       alert(data.error);
     }
@@ -69,8 +73,8 @@ export default function LoginPage() {
                   }
                 />
                 <p className="text-xs text-gray-500">
-                  It must be a combination of minimum 8 uppercase and lowercase
-                  letters, numbers, and symbols
+                  It must be a combination of minimum 6 uppercase and lowercase
+                  letters, numbers, and special characters #, $, %, &
                 </p>
               </div>
 
