@@ -1,0 +1,195 @@
+{
+  "info": {
+    "name": "User API",
+    "_postman_id": "user-api-1234-5678",
+    "description": "API endpoints for user management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"johndoe\",\n  \"titleId\": \"1\",\n  \"firstname\": \"John\",\n  \"lastname\": \"Doe\",\n  \"level\": \"5\",\n  \"email\": \"john@example.com\",\n  \"password\": \"secret123\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users"]
+        }
+      }
+    },
+    {
+      "name": "Get User",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/users/johndoe",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "johndoe"]
+        }
+      }
+    },
+    {
+      "name": "Update User",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"titleId\": \"2\",\n  \"firstname\": \"John\",\n  \"lastname\": \"Doe Updated\",\n  \"level\": \"6\",\n  \"email\": \"john.doe@example.com\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users/johndoe",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "johndoe"]
+        }
+      }
+    },
+    {
+      "name": "Update Password",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"newsecret456\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users/johndoe/reset-password",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "johndoe", "password"]
+        }
+      }
+    },
+    {
+      "name": "Delete User",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/users/johndoe",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "johndoe"]
+        }
+      }
+    },
+    {
+      "name": "Get Current User",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/users/current",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "current"]
+        }
+      }
+    },
+    {
+      "name": "Get All Users",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/users",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users"]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"johndoe\",\n  \"password\": \"newsecret456\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users/login",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "login"]
+        }
+      }
+    },
+    {
+      "name": "Create User Title",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"titleId\": \"1\",\n  \"title\": \"Manager\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users/titles",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "titles"]
+        }
+      }
+    },
+    {
+      "name": "Get All User Titles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/users/titles",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "titles"]
+        }
+      }
+    }
+  ]
+}

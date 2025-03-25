@@ -1,0 +1,268 @@
+{
+  "info": {
+    "name": "Form API",
+    "_postman_id": "form-api-1234-5678",
+    "description": "API endpoints for form management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Form",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"formId\": \"FORM001\",\n  \"formTypeId\": \"TEMPLATE001\",\n  \"status\": \"DRAFT\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms"]
+        }
+      }
+    },
+    {
+      "name": "Get Form",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001"]
+        }
+      }
+    },
+    {
+      "name": "Update Form",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"SUBMITTED\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001"]
+        }
+      }
+    },
+    {
+      "name": "Delete Form",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001"]
+        }
+      }
+    },
+    {
+      "name": "Get All Forms",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/forms",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms"]
+        }
+      }
+    },
+    {
+      "name": "Add Form Content (Number)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fieldValue\": 42,\n  \"contentTemplateId\": \"1\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/content",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "content"]
+        }
+      }
+    },
+    {
+      "name": "Add Form Content (Text)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fieldValue\": \"Sample text\",\n  \"contentTemplateId\": \"2\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/content",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "content"]
+        }
+      }
+    },
+    {
+      "name": "Add Form Content (Boolean)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fieldValue\": true,\n  \"contentTemplateId\": \"3\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/content",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "content"]
+        }
+      }
+    },
+    {
+      "name": "Add Form Content (Date)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fieldValue\": \"2025-03-22\",\n  \"contentTemplateId\": \"4\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/content",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "content"]
+        }
+      }
+    },
+    {
+      "name": "Add Signature",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"signatureTemplateId\": \"1\",\n  \"signature\": \"John Doe\",\n  \"decidedOn\": \"2025-03-22\",\n  \"status\": \"APPROVED\",\n  \"rejectionReason\": null,\n  \"titleId\": \"1\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/signatures",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "signatures"]
+        }
+      }
+    },
+    {
+      "name": "Add Attachment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"filePath\": \"/uploads/FORM001/doc.pdf\",\n  \"attachmentTemplateId\": \"1\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/forms/FORM001/attachments",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "FORM001", "attachments"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "info": {
+    "name": "Form Template API",
+    "_postman_id": "form-template-api-1234-5678",
+    "description": "API endpoints for form template management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Form Template",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"formTypeId\": \"TEMPLATE001\",\n  \"status\": \"ACTIVE\",\n  \"title\": \"Sample Form Template\",\n  \"description\": \"A sample form template for testing\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/form-templates",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates"]
+        }
+      }
+    },
+    {
+      "name": "Get Form Template",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates", "TEMPLATE001"]
+        }
+      }
+    },
+    {
+      "name": "Update Form Template",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"INACTIVE\",\n  \"title\": \"Updated Sample Form Template\",\n  \"description\": \"Updated description\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates", "TEMPLATE001"]
+        }
+      }
+    },
+    {
+      "name": "Delete Form Template",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates", "TEMPLATE001"]
+        }
+      }
+    },
+    {
+      "name": "Get All Form Templates",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "localhost:8080/api/form-templates",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates"]
+        }
+      }
+    },
+    {
+      "name": "Add Content Template",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fieldName\": \"quantity\",\n  \"isValueNeeded\": true,\n  \"valueType\": \"NUMBER\",\n  \"description\": \"Quantity field\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001/content-templates",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "form-templates", "TEMPLATE001", "content-templates"]
+        }
+      }
+    },
+    {
+      "name": "Add Signature Template",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"titleId\": \"1\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001/signature-templates",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": [
+            "api",
+            "form-templates",
+            "TEMPLATE001",
+            "signature-templates"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Add Attachment Template",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"attachmentTemplateId\": \"1\",\n  \"fileType\": \"PDF\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/form-templates/TEMPLATE001/attachment-templates",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": [
+            "api",
+            "form-templates",
+            "TEMPLATE001",
+            "attachment-templates"
+          ]
+        }
+      }
+    }
+  ]
+}
