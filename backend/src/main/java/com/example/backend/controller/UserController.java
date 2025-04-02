@@ -1,7 +1,10 @@
 package com.example.backend.controller;
 
 import com.example.backend.util.JwtUtil;
+
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,7 +34,19 @@ public class UserController {
 
     // Create user with credentials
     @PostMapping
-    public ResponseEntity<String> createUser(@RequestBody Map<String, String> userData) {
+    public ResponseEntity<String> createUser(HttpServletRequest request, @RequestBody Map<String, String> userData) {
+        // Get the username of the requester
+        String requesterUsername = (String) request.getAttribute("username");
+
+        // Check if the requester is an admin
+        String checkAdminSql = "SELECT level FROM USERS WHERE username = ?";
+        Integer requesterLevel = jdbcTemplate.queryForObject(checkAdminSql,
+                Integer.class, requesterUsername);
+        if (requesterLevel == null || requesterLevel != 4) {
+            return new ResponseEntity<>("Unauthorized: Only admins can create users",
+                    HttpStatus.UNAUTHORIZED);
+        }
+
         String userSql = "INSERT INTO USERS (username, title_id, firstname, lastname, level, email) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
         String credSql = "INSERT INTO CREDENTIALS (username, password) VALUES (?, ?)";
@@ -62,9 +77,10 @@ public class UserController {
         return new ResponseEntity<>("User created successfully", HttpStatus.CREATED);
     }
 
-    // Get user with credentials and title
-    @GetMapping("/{username}")
-    public ResponseEntity<Map<String, Object>> getUser(@PathVariable String username) {
+    // Get current user by token
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getCurrentUser(HttpServletRequest request) {
+        String username = request.getAttribute("username").toString();
         String sql = "SELECT u.*, c.password, ut.title " +
                 "FROM USERS u " +
                 "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
@@ -77,7 +93,19 @@ public class UserController {
 
     // Update user
     @PutMapping("/{username}")
-    public ResponseEntity<String> updateUser(@PathVariable String username, @RequestBody Map<String, String> userData) {
+    public ResponseEntity<String> updateUser(HttpServletRequest request, @PathVariable String username,
+            @RequestBody Map<String, String> userData) {
+
+        // Get the username of the requester
+        String requesterUsername = (String) request.getAttribute("username");
+
+        // Check if the requester is an admin
+        String checkAdminSql = "SELECT level FROM USERS WHERE username = ?";
+        Integer requesterLevel = jdbcTemplate.queryForObject(checkAdminSql, Integer.class, requesterUsername);
+        if (requesterLevel == null || requesterLevel != 4) {
+            return new ResponseEntity<>("Unauthorized: Only admins can update users", HttpStatus.UNAUTHORIZED);
+        }
+
         String sql = "UPDATE USERS SET " +
                 "title_id = ?, " +
                 "firstname = ?, " +
@@ -97,10 +125,25 @@ public class UserController {
         return new ResponseEntity<>("User updated successfully", HttpStatus.OK);
     }
 
+    // Get user with credentials and title
+    @GetMapping("/{username}")
+    public ResponseEntity<Map<String, Object>> getUser(@PathVariable String username) {
+        String sql = "SELECT u.*, c.password, ut.title " +
+                "FROM USERS u " +
+                "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
+                "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id " +
+                "WHERE u.username = ?";
+
+        Map<String, Object> user = jdbcTemplate.queryForMap(sql, username);
+        return new ResponseEntity<>(user, HttpStatus.OK);
+    }
+
     // Update password
-    @PutMapping("/{username}/reset-password")
-    public ResponseEntity<String> updatePassword(@PathVariable String username, @RequestBody Map<String, String> data) {
-        String sql = "UPDATE CREDENTIALS SET password = ?, login_first_time = FALSE  WHERE username = ?";
+    @PutMapping("/reset-password")
+    public ResponseEntity<String> updatePassword(HttpServletRequest request,
+            @RequestBody Map<String, String> data) {
+        String username = request.getAttribute("username").toString();
+        String sql = "UPDATE CREDENTIALS SET password = ?, login_first_time = FALSE WHERE username = ?";
 
         // Generate new salt and hash new password
         String plainPassword = data.get("password");
@@ -113,33 +156,59 @@ public class UserController {
 
     // Delete user (cascades to credentials due to FK)
     @DeleteMapping("/{username}")
-    public ResponseEntity<String> deleteUser(@PathVariable String username) {
-        // Delete credentials first due to foreign key constraint
-        String sql = "DELETE FROM CREDENTIALS WHERE username = ?";
-        jdbcTemplate.update(sql, username);
-        sql = "DELETE FROM USERS WHERE username = ?";
-        jdbcTemplate.update(sql, username);
+    public ResponseEntity<String> deleteUser(HttpServletRequest request, @PathVariable String username) {
+        try {
+            // Get the username of the requester
+            String requesterUsername = (String) request.getAttribute("username");
 
-        return new ResponseEntity<>("User deleted successfully", HttpStatus.NO_CONTENT);
-    }
+            // Check if the requester is an admin
+            String checkAdminSql = "SELECT level FROM USERS WHERE username = ?";
+            Integer requesterLevel = jdbcTemplate.queryForObject(checkAdminSql, Integer.class, requesterUsername);
+            if (requesterLevel == null || requesterLevel != 4) {
+                return new ResponseEntity<>("Unauthorized: Only admins can delete users", HttpStatus.UNAUTHORIZED);
+            }
 
-    // Get current user by token
-    @GetMapping
-    public ResponseEntity<Map<String, Object>> getCurrentUser(@RequestHeader("Authorization") String token) {
-        String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
-        String sql = "SELECT u.*, c.password, ut.title " +
-                "FROM USERS u " +
-                "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
-                "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id " +
-                "WHERE u.username = ?";
+            // Check if the user to be deleted exists
+            String checkSql = "SELECT COUNT(*) FROM USERS WHERE username = ?";
+            int userCount = jdbcTemplate.queryForObject(checkSql, Integer.class, username);
+            if (userCount == 0) {
+                return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+            }
 
-        Map<String, Object> user = jdbcTemplate.queryForMap(sql, username);
-        return new ResponseEntity<>(user, HttpStatus.OK);
+            // Delete credentials first, then user
+            String sql = "DELETE FROM CREDENTIALS WHERE username = ?";
+            jdbcTemplate.update(sql, username);
+            sql = "DELETE FROM USERS WHERE username = ?";
+            jdbcTemplate.update(sql, username);
+
+            return new ResponseEntity<>(HttpStatus.OK); // No body for 204
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error deleting user: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Get all users
-    @GetMapping("/all")
-    public ResponseEntity<List<Map<String, Object>>> getAllUsers() {
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<Map<String, Object>>> getAllUsers(HttpServletRequest request) {
+        String username = (String) request.getAttribute("username");
+        System.out.println("Username from request: " + username); // Debug log
+
+        // Get level of user by username
+        String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+        Integer level;
+        try {
+            level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+        } catch (EmptyResultDataAccessException e) {
+            System.out.println("No user found for username: " + username);
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED); // 401 if user not found
+        }
+
+        // If user is not admin (level 4), return unauthorized
+        if (level != 4) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED); // 401 for non-admins
+        }
+
+        // Fetch all users
         String sql = "SELECT u.*, c.password, ut.title " +
                 "FROM USERS u " +
                 "LEFT JOIN CREDENTIALS c ON u.username = c.username " +

@@ -5,6 +5,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+
+import com.example.backend.util.JwtUtil;
+
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,29 +22,52 @@ public class FormController {
 
     // Create a new form
     @PostMapping
-    public ResponseEntity<String> createForm(HttpServletRequest request,
+    public ResponseEntity<String> createForm(@RequestHeader("Authorization") String token,
             @RequestBody Map<String, Object> formData) {
         String sql = "INSERT INTO FORMS (formID, formTypeID, username, status, created_date, last_updated) " +
                 "VALUES (?, ?, ?, CAST(? AS form_status), ?, ?)";
 
         String formId = (String) formData.get("formId");
-        String username = (String) request.getAttribute("username");
-        jdbcTemplate.update(sql,
-                formId,
-                formData.get("formTypeId"),
-                username,
-                formData.get("status"),
-                LocalDate.now(),
-                LocalDate.now());
+        String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
+        try {
+            jdbcTemplate.update(sql,
+                    formId,
+                    formData.get("formTypeId"),
+                    username,
+                    formData.get("status"),
+                    LocalDate.now(),
+                    LocalDate.now());
+            return new ResponseEntity<>("Form created successfully", HttpStatus.CREATED);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error creating form: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-        return new ResponseEntity<>("Form created successfully", HttpStatus.CREATED);
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<Map<String, Object>>> getAllFormsforAdmins(HttpServletRequest request) {
+        String username = (String) request.getAttribute("username");
+        // get level of user by username
+        String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+        int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+        // if user is not admin, return unauthorized
+        if (level != 4) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+
+        // Query to get all forms, regardless of username
+        String sql = "SELECT f.*, ft.title, ft.description " +
+                "FROM FORMS f " +
+                "JOIN FORM_TEMPLATES ft ON f.formTypeID = ft.formTypeID";
+
+        List<Map<String, Object>> forms = jdbcTemplate.queryForList(sql);
+        return new ResponseEntity<>(forms, HttpStatus.OK);
     }
 
     // Get form details including content, signatures, and attachments
     @GetMapping("/{formId}")
-    public ResponseEntity<Map<String, Object>> getForm(HttpServletRequest request,
+    public ResponseEntity<Map<String, Object>> getForm(@RequestHeader("Authorization") String token,
             @PathVariable String formId) {
-        String username = (String) request.getAttribute("username");
+        String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
         String sql = "SELECT f.*, ft.title, ft.description " +
                 "FROM FORMS f " +
                 "JOIN FORM_TEMPLATES ft ON f.formTypeID = ft.formTypeID " +
@@ -89,9 +115,22 @@ public class FormController {
     public ResponseEntity<String> deleteForm(HttpServletRequest request,
             @PathVariable String formId) {
         String username = (String) request.getAttribute("username");
-        String sql = "DELETE FROM FORMS WHERE formID = ? AND username = ?";
-        jdbcTemplate.update(sql, formId, username);
-        return new ResponseEntity<>("Form deleted successfully", HttpStatus.NO_CONTENT);
+
+        // Delete related records in dependent tables
+        String deleteContentSql = "DELETE FROM FORM_CONTENT WHERE formID = ?";
+        jdbcTemplate.update(deleteContentSql, formId);
+
+        String deleteSignaturesSql = "DELETE FROM SIGNATURES WHERE formID = ?";
+        jdbcTemplate.update(deleteSignaturesSql, formId);
+
+        String deleteAttachmentsSql = "DELETE FROM ATTACHMENTS WHERE formID = ?";
+        jdbcTemplate.update(deleteAttachmentsSql, formId);
+
+        // Delete the form itself
+        String deleteFormSql = "DELETE FROM FORMS WHERE formID = ? AND username = ?";
+        jdbcTemplate.update(deleteFormSql, formId, username);
+
+        return new ResponseEntity<>("Form deleted successfully", HttpStatus.OK);
     }
 
     // Get all forms
@@ -198,23 +237,73 @@ public class FormController {
             @PathVariable String formId,
             @RequestBody Map<String, Object> signatureData) {
         String username = (String) request.getAttribute("username");
+
+        // Fetch user details
+        String userSql = "SELECT firstname, lastname, title_id FROM USERS WHERE username = ?";
+        Map<String, Object> user;
+        try {
+            user = jdbcTemplate.queryForMap(userSql, username);
+        } catch (Exception e) {
+            return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+        }
+
+        // Extract and validate the entered signature
+        String signature = (String) signatureData.get("signature");
+        String[] nameParts = signature.split(" ");
+        if (nameParts.length < 2) {
+            return new ResponseEntity<>("Invalid signature format. Please provide both first name and last name.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        String enteredFirstName = nameParts[0];
+        String enteredLastName = nameParts[1];
+        Integer enteredTitleId = signatureData.get("titleId") != null
+                ? Integer.parseInt(signatureData.get("titleId").toString())
+                : null;
+
+        if (!user.get("firstname").equals(enteredFirstName) || !user.get("lastname").equals(enteredLastName)
+                || !user.get("title_id").equals(enteredTitleId)) {
+            return new ResponseEntity<>(
+                    "Signature validation failed: First name, last name, or title ID does not match",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        // Validate titleID from signature template
+        Integer signatureTemplateId = signatureData.get("signatureTemplateId") != null
+                ? Integer.parseInt(signatureData.get("signatureTemplateId").toString())
+                : null;
+        if (signatureTemplateId == null) {
+            return new ResponseEntity<>("signatureTemplateId is required", HttpStatus.BAD_REQUEST);
+        }
+
+        String templateSql = "SELECT title_id FROM signature_templates WHERE signature_template_id = ?";
+        Integer templateTitleId;
+        try {
+            templateTitleId = jdbcTemplate.queryForObject(templateSql, Integer.class, signatureTemplateId);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Invalid signatureTemplateId", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!user.get("title_id").equals(templateTitleId) || !templateTitleId.equals(enteredTitleId)) {
+            return new ResponseEntity<>(
+                    "Signature validation failed: Title ID mismatch with the requirements",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        // Insert the signature
         String sql = "INSERT INTO SIGNATURES (signature_template_id, formID, username, signature, decided_on, status, rejection_reason, title_id) "
                 +
                 "VALUES (?, ?, ?, ?, ?, CAST(? AS form_status), ?, ?)";
 
         jdbcTemplate.update(sql,
-                signatureData.get("signatureTemplateId") != null
-                        ? Integer.parseInt(signatureData.get("signatureTemplateId").toString())
-                        : null,
+                signatureTemplateId,
                 formId,
                 username,
-                signatureData.get("signature"),
+                signature,
                 signatureData.get("decidedOn") != null ? LocalDate.parse(signatureData.get("decidedOn").toString())
                         : null,
                 signatureData.get("status"),
                 signatureData.get("rejectionReason"),
-                signatureData.get("titleId") != null ? Integer.parseInt(signatureData.get("titleId").toString())
-                        : null);
+                enteredTitleId);
 
         return new ResponseEntity<>("Signature added successfully", HttpStatus.CREATED);
     }

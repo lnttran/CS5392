@@ -44,7 +44,6 @@ public class JwtUtil {
                 .setSigningKey(secretKey)
                 .parseClaimsJws(token)
                 .getBody();
-        System.out.println("Extracted:" + claims);
         return claims.getSubject();
     }
 }

@@ -1,0 +1,32 @@
+{
+  "info": {
+    "name": "Auth API",
+    "_postman_id": "auth-api-1234-5678",
+    "description": "API endpoints for authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"johndoe\",\n  \"password\": \"newsecret456\"\n}"
+        },
+        "url": {
+          "raw": "localhost:8080/api/users/login",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "login"]
+        }
+      }
+    }
+  ]
+}

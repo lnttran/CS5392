@@ -33,7 +33,7 @@
       }
     },
     {
-      "name": "Get Form",
+      "name": "Get Form Given User",
       "request": {
         "method": "GET",
         "header": [
@@ -51,13 +51,17 @@
       }
     },
     {
-      "name": "Update Form",
+      "name": "Update Form Given User",
       "request": {
         "method": "PUT",
         "header": [
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
           }
         ],
         "body": {
@@ -73,7 +77,7 @@
       }
     },
     {
-      "name": "Delete Form",
+      "name": "Delete Form Given User",
       "request": {
         "method": "DELETE",
         "header": [
@@ -91,7 +95,7 @@
       }
     },
     {
-      "name": "Get All Forms",
+      "name": "Get All Forms Given User",
       "request": {
         "method": "GET",
         "header": [
@@ -261,6 +265,24 @@
           "host": ["localhost"],
           "port": "8080",
           "path": ["api", "forms", "FORM001", "attachments"]
+        }
+      }
+    },
+    {
+      "name": "Get All Forms for Admins",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "localhost:8080/api/forms/admin/all",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "forms", "admin", "all"]
         }
       }
     }
