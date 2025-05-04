@@ -19,37 +19,65 @@ import {
 } from "@/components/ui/table";
 import { Signup } from "@/components/users/signup";
 import { useEffect, useState } from "react";
-import { User } from "@prisma/client";
 import { userLevels } from "@/lib/user-levels";
 import { toast } from "sonner";
+import { TitleManagement } from "@/components/users/title-management";
+import { User } from "@/types/user";
+import { fetchWithAuth } from "@/lib/fetch";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch("/api/user/all-users");
-        if (!res.ok) throw new Error("Failed to fetch users");
-        const data = await res.json();
-        setUsers(data);
-      } catch (error) {
-        console.error(error);
-      }
-    };
+    // This runs only in the browser
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) {
+      toast.error("You are not logged in");
+      window.location.href = "/authentication";
+    } else {
+      setToken(storedToken);
+    }
+  }, []);
+  const fetchUsers = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/admin/all`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
 
-    fetchUsers();
-  }, [setUsers]);
+      const data = await res.json();
+      console.log(data, "users");
+
+      if (res.ok) {
+        setUsers(data);
+      } else {
+        console.error("Error fetching all users:", data.error);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  useEffect(() => {
+    if (token) {
+      fetchUsers(); // Only fetch users if token exists
+    }
+  }, [token]);
+
+  //get local storage token
 
   async function deleteUser(username: string) {
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username }),
-      });
+      const response = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/${username}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
 
       const data = await response.json();
 
@@ -65,13 +93,16 @@ export default function UsersPage() {
   }
 
   return (
-    <div className=" bg-background w-[80vw]">
+    <div className="bg-background w-full">
       <div className="flex h-full flex-col gap-6 p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Users</h1>
-          <Signup />
+          <div className="flex flex-row gap-10">
+            <TitleManagement />
+            {token && <Signup token={token} onUserCreated={fetchUsers} />}
+          </div>
         </div>
-        <div className="flex-1 ">
+        <div className="flex-1">
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -85,11 +116,11 @@ export default function UsersPage() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.username}>
                     <TableCell className="font-medium">
                       {user.username}
                     </TableCell>
-                    <TableCell>{`${user.firstName} ${user.lastName}`}</TableCell>
+                    <TableCell>{`${user.firstname} ${user.lastname}`}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge

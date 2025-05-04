@@ -95,13 +95,15 @@ export default function FormPage() {
   }
 
   return (
-    <div className=" bg-background w-[80vw]">
+    <div className=" bg-background w-full">
       <div className="flex h-full flex-col gap-6 p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">My form</h1>
           <Button
             className="font-bold bg-gradient-to-r from-[#5CADF8] from-0% via-[#5F5DF9] via-63% to-[#9B8BFC]  hover:bg-blue-500"
-            onClick={() => router.push("/dashboard/form/example")}
+            onClick={() =>
+              router.push("/dashboard/form/create/select-template")
+            }
           >
             <Plus className="h-5 w-5" />
             Create a form

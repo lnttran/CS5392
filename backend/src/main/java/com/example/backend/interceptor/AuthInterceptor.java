@@ -17,7 +17,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (token != null && token.startsWith("Bearer ")) {
             String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
             if (request.getAttribute("username") == null) {
-                System.out.println("Authenticated user: " + username);
+                // System.out.println("Authenticated user: " + username);
                 request.setAttribute("username", username);
             } else {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);

@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,33 +22,150 @@ public class FormTemplateController {
 
         // Create form template
         @PostMapping
-        public ResponseEntity<String> createFormTemplate(HttpServletRequest request,
-                        @RequestBody Map<String, String> templateData) {
+        public ResponseEntity<Map<String, Object>> createFormTemplateWithTemplates(HttpServletRequest request,
+                        @RequestBody Map<String, Object> data) {
+                Map<String, Object> result = new HashMap<>();
+                List<String> contentErrors = new ArrayList<>();
+                List<String> signatureErrors = new ArrayList<>();
+                List<String> attachmentErrors = new ArrayList<>();
+
                 try {
                         String username = (String) request.getAttribute("username");
-                        // Get level of user by username
                         String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
                         int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
-                        // If user is not admin, return unauthorized
                         if (level != 4) {
-                                return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
+                                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                                .body(Map.of("error", "Unauthorized"));
                         }
 
-                        String sql = "INSERT INTO FORM_TEMPLATES (formTypeID, status, title, description) " +
+                        String formTypeId = (String) data.get("formtypeid");
+                        String status = (String) data.get("status");
+                        String title = (String) data.get("title");
+                        String description = (String) data.get("description");
+
+                        // Insert into FORM_TEMPLATES
+                        String formSql = "INSERT INTO FORM_TEMPLATES (formTypeID, status, title, description) " +
                                         "VALUES (?, CAST(? AS form_status), ?, ?)";
+                        jdbcTemplate.update(formSql, formTypeId, status, title, description);
+                        result.put("formTemplate", "Created");
 
-                        jdbcTemplate.update(sql,
-                                        templateData.get("formTypeId"),
-                                        templateData.get("status"),
-                                        templateData.get("title"),
-                                        templateData.get("description"));
+                        // --- Content Templates ---
+                        List<Map<String, Object>> contentTemplates = (List<Map<String, Object>>) data
+                                        .get("contentTemplates");
+                        if (contentTemplates != null) {
+                                for (Map<String, Object> ct : contentTemplates) {
+                                        try {
+                                                String contentSql = "INSERT INTO FORM_CONTENT_TEMPLATES (formTypeID, field_name, is_value_needed, value_type, description) "
+                                                                +
+                                                                "VALUES (?, ?, ?, CAST(? AS value_type), ?)";
+                                                jdbcTemplate.update(contentSql,
+                                                                formTypeId,
+                                                                ct.get("field_name"),
+                                                                ct.get("is_value_needed"),
+                                                                ct.get("value_type"),
+                                                                ct.get("description"));
+                                        } catch (Exception e) {
+                                                contentErrors.add("Failed to insert field: " + ct.get("field_name")
+                                                                + " - " + e.getMessage());
+                                        }
+                                }
+                        }
 
-                        return new ResponseEntity<>("Form template created successfully", HttpStatus.CREATED);
+                        // --- Signature Templates ---
+                        List<Map<String, Object>> signatureTemplates = (List<Map<String, Object>>) data
+                                        .get("signatureTemplates");
+                        if (signatureTemplates != null) {
+                                for (Map<String, Object> st : signatureTemplates) {
+                                        try {
+                                                Object titleIdObj = st.get("title_id");
+                                                Integer titleId = titleIdObj != null
+                                                                ? Integer.parseInt(titleIdObj.toString())
+                                                                : null;
+
+                                                // Validate title_id
+                                                if (titleId != null) {
+                                                        String checkSql = "SELECT COUNT(*) FROM USER_TITLES WHERE title_id = ?";
+                                                        Integer count = jdbcTemplate.queryForObject(checkSql,
+                                                                        Integer.class, titleId);
+                                                        if (count == null || count == 0) {
+                                                                signatureErrors.add("titleId not found: " + titleId);
+                                                                continue;
+                                                        }
+                                                }
+
+                                                String sigSql = "INSERT INTO SIGNATURE_TEMPLATES (formTypeID, title_id) VALUES (?, ?)";
+                                                jdbcTemplate.update(sigSql, formTypeId, titleId);
+                                        } catch (Exception e) {
+                                                signatureErrors.add("Error inserting signature: " + e.getMessage());
+                                        }
+                                }
+                        }
+
+                        // --- Attachment Templates ---
+                        List<Map<String, String>> attachmentTemplates = (List<Map<String, String>>) data
+                                        .get("attachmentTemplates");
+                        if (attachmentTemplates != null) {
+                                for (Map<String, String> at : attachmentTemplates) {
+                                        try {
+                                                String attSql = "INSERT INTO ATTACHMENT_TEMPLATES (formTypeID, description, file_type) "
+                                                                +
+                                                                "VALUES (?, ?, CAST(? AS file_type))";
+                                                jdbcTemplate.update(
+                                                                attSql,
+                                                                formTypeId,
+                                                                at.get("description"),
+                                                                at.get("file_type"));
+                                        } catch (Exception e) {
+                                                attachmentErrors.add(
+                                                                "Error inserting attachment (fileType: "
+                                                                                + at.get("fileType") + ") - "
+                                                                                + e.getMessage());
+                                        }
+                                }
+                        }
+
+                        // Collect final result
+                        result.put("contentTemplates", contentErrors.isEmpty() ? "All inserted" : contentErrors);
+                        result.put("signatureTemplates", signatureErrors.isEmpty() ? "All inserted" : signatureErrors);
+                        result.put("attachmentTemplates",
+                                        attachmentErrors.isEmpty() ? "All inserted" : attachmentErrors);
+
+                        return ResponseEntity.status(HttpStatus.CREATED).body(result);
                 } catch (Exception e) {
-                        return new ResponseEntity<>(e.getMessage(),
-                                        HttpStatus.INTERNAL_SERVER_ERROR);
+                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                        .body(Map.of("error", e.getMessage()));
                 }
         }
+
+        // public ResponseEntity<String> createFormTemplate(HttpServletRequest request,
+        // @RequestBody Map<String, String> templateData) {
+        // try {
+        // String username = (String) request.getAttribute("username");
+        // // Get level of user by username
+        // String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+        // int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+        // // If user is not admin, return unauthorized
+        // if (level != 4) {
+        // return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
+        // }
+
+        // String sql = "INSERT INTO FORM_TEMPLATES (formTypeID, status, title,
+        // description) " +
+        // "VALUES (?, CAST(? AS form_status), ?, ?)";
+
+        // jdbcTemplate.update(sql,
+        // templateData.get("formTypeId"),
+        // templateData.get("status"),
+        // templateData.get("title"),
+        // templateData.get("description"));
+
+        // return new ResponseEntity<>("Form template created successfully",
+        // HttpStatus.CREATED);
+        // } catch (Exception e) {
+        // return new ResponseEntity<>(e.getMessage(),
+        // HttpStatus.INTERNAL_SERVER_ERROR);
+        // }
+        // }
 
         // Get form template with content and signature templates
         @GetMapping("/{formTypeId}")
@@ -173,54 +292,62 @@ public class FormTemplateController {
 
         }
 
-        // Add content template
-        @PostMapping("/{formTypeId}/content-templates")
-        public ResponseEntity<String> addContentTemplate(@PathVariable String formTypeId,
-                        @RequestBody Map<String, Object> contentData) {
-                String sql = "INSERT INTO FORM_CONTENT_TEMPLATES (formTypeID, field_name, is_value_needed, value_type, description) "
-                                +
-                                "VALUES (?, ?, ?, CAST(? AS value_type), ?)";
+        // // Add content template
+        // @PostMapping("/{formTypeId}/content-templates")
+        // public ResponseEntity<String> addContentTemplate(@PathVariable String
+        // formTypeId,
+        // @RequestBody Map<String, Object> contentData) {
+        // String sql = "INSERT INTO FORM_CONTENT_TEMPLATES (formTypeID, field_name,
+        // is_value_needed, value_type, description) "
+        // +
+        // "VALUES (?, ?, ?, CAST(? AS value_type), ?)";
 
-                jdbcTemplate.update(sql,
-                                formTypeId,
-                                contentData.get("fieldName"),
-                                contentData.get("isValueNeeded"),
-                                contentData.get("valueType"),
-                                contentData.get("description"));
+        // jdbcTemplate.update(sql,
+        // formTypeId,
+        // contentData.get("fieldName"),
+        // contentData.get("isValueNeeded"),
+        // contentData.get("valueType"),
+        // contentData.get("description"));
 
-                return new ResponseEntity<>("Content template added successfully", HttpStatus.CREATED);
-        }
+        // return new ResponseEntity<>("Content template added successfully",
+        // HttpStatus.CREATED);
+        // }
 
-        // Add signature template
-        @PostMapping("/{formTypeId}/signature-templates")
-        public ResponseEntity<String> addSignatureTemplate(@PathVariable String formTypeId,
-                        @RequestBody Map<String, Object> signatureData) {
-                String sql = "INSERT INTO SIGNATURE_TEMPLATES (formTypeID, title_id) VALUES (?, ?)";
+        // // Add signature template
+        // @PostMapping("/{formTypeId}/signature-templates")
+        // public ResponseEntity<String> addSignatureTemplate(@PathVariable String
+        // formTypeId,
+        // @RequestBody Map<String, Object> signatureData) {
+        // String sql = "INSERT INTO SIGNATURE_TEMPLATES (formTypeID, title_id) VALUES
+        // (?, ?)";
 
-                jdbcTemplate.update(sql,
-                                formTypeId,
-                                signatureData.get("titleId") != null
-                                                ? Integer.parseInt(signatureData.get("titleId").toString())
-                                                : null);
+        // jdbcTemplate.update(sql,
+        // formTypeId,
+        // signatureData.get("titleId") != null
+        // ? Integer.parseInt(signatureData.get("titleId").toString())
+        // : null);
 
-                return new ResponseEntity<>("Signature template added successfully", HttpStatus.CREATED);
-        }
+        // return new ResponseEntity<>("Signature template added successfully",
+        // HttpStatus.CREATED);
+        // }
 
-        // Add attachment template
-        @PostMapping("/{formTypeId}/attachment-templates")
-        public ResponseEntity<String> addAttachmentTemplate(@PathVariable String formTypeId,
-                        @RequestBody Map<String, String> attachmentData) {
-                String sql = "INSERT INTO ATTACHMENT_TEMPLATES ( formTypeID, file_type) " +
-                                "VALUES ( ?, CAST(? AS file_type))";
+        // // Add attachment template
+        // @PostMapping("/{formTypeId}/attachment-templates")
+        // public ResponseEntity<String> addAttachmentTemplate(@PathVariable String
+        // formTypeId,
+        // @RequestBody Map<String, String> attachmentData) {
+        // String sql = "INSERT INTO ATTACHMENT_TEMPLATES ( formTypeID, file_type) " +
+        // "VALUES ( ?, CAST(? AS file_type))";
 
-                jdbcTemplate.update(sql,
-                                // attachmentData.get("attachmentTemplateId") != null
-                                // ? Integer.parseInt(
-                                // attachmentData.get("attachmentTemplateId").toString())
-                                // : null,
-                                formTypeId,
-                                attachmentData.get("fileType"));
+        // jdbcTemplate.update(sql,
+        // // attachmentData.get("attachmentTemplateId") != null
+        // // ? Integer.parseInt(
+        // // attachmentData.get("attachmentTemplateId").toString())
+        // // : null,
+        // formTypeId,
+        // attachmentData.get("fileType"));
 
-                return new ResponseEntity<>("Attachment template added successfully", HttpStatus.CREATED);
-        }
+        // return new ResponseEntity<>("Attachment template added successfully",
+        // HttpStatus.CREATED);
+        // }
 }

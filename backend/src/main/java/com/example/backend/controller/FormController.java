@@ -22,22 +22,51 @@ public class FormController {
 
     // Create a new form
     @PostMapping
-    public ResponseEntity<String> createForm(@RequestHeader("Authorization") String token,
+    public ResponseEntity<String> createForm(HttpServletRequest request,
             @RequestBody Map<String, Object> formData) {
-        String sql = "INSERT INTO FORMS (formID, formTypeID, username, status, created_date, last_updated) " +
+        String sql = "INSERT INTO FORMS (formid, formtypeid, username, status, created_date, last_updated) " +
                 "VALUES (?, ?, ?, CAST(? AS form_status), ?, ?)";
 
-        String formId = (String) formData.get("formId");
-        String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
+        String formid = (String) formData.get("formid");
+        String username = (String) request.getAttribute("username");
         try {
             jdbcTemplate.update(sql,
-                    formId,
-                    formData.get("formTypeId"),
+                    formid,
+                    formData.get("formtypeid"),
                     username,
                     formData.get("status"),
                     LocalDate.now(),
                     LocalDate.now());
-            return new ResponseEntity<>("Form created successfully", HttpStatus.CREATED);
+
+            // add content
+            List<Map<String, Object>> contents = (List<Map<String, Object>>) formData.get("contents");
+            if (contents != null) {
+                for (Map<String, Object> content : contents) {
+                    ResponseEntity<String> res = addFormContent(request, formid, content);
+                    if (!res.getStatusCode().is2xxSuccessful())
+                        return res;
+                }
+            }
+            // Add Attachments
+            List<Map<String, Object>> attachments = (List<Map<String, Object>>) formData.get("attachments");
+            if (attachments != null) {
+                for (Map<String, Object> attachment : attachments) {
+                    ResponseEntity<String> res = addAttachment(request, formid, attachment);
+                    if (!res.getStatusCode().is2xxSuccessful())
+                        return res;
+                }
+            }
+
+            List<Map<String, Object>> signatures = (List<Map<String, Object>>) formData.get("signatures");
+            if (signatures != null) {
+                for (Map<String, Object> signature : signatures) {
+                    ResponseEntity<String> res = addSigner(request, formid, signature);
+                    if (!res.getStatusCode().is2xxSuccessful())
+                        return res;
+                }
+            }
+
+            return new ResponseEntity<>("{\"message\": \"Full form submission successful\"}", HttpStatus.CREATED);
         } catch (Exception e) {
             return new ResponseEntity<>("Error creating form: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -146,69 +175,79 @@ public class FormController {
         return new ResponseEntity<>(forms, HttpStatus.OK);
     }
 
+    @GetMapping("/exists/{formid}")
+    public ResponseEntity<Boolean> doesFormExist(@PathVariable String formid) {
+        String sql = "SELECT COUNT(*) FROM forms WHERE formid = ?";
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, formid);
+            return new ResponseEntity<>(count != null && count > 0, HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(false, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     // Add form content
     @PostMapping("/{formId}/content")
     public ResponseEntity<String> addFormContent(HttpServletRequest request,
             @PathVariable String formId,
             @RequestBody Map<String, Object> contentData) {
-        String username = (String) request.getAttribute("username");
         // Extract contentTemplateId from request
-        Integer contentTemplateId = contentData.get("contentTemplateId") != null
-                ? Integer.parseInt(contentData.get("contentTemplateId").toString())
+        Integer content_template_id = contentData.get("content_template_id") != null
+                ? Integer.parseInt(contentData.get("content_template_id").toString())
                 : null;
-        if (contentTemplateId == null) {
-            return new ResponseEntity<>("contentTemplateId is required", HttpStatus.BAD_REQUEST);
+        if (content_template_id == null) {
+            return new ResponseEntity<>("content_template_id is required", HttpStatus.BAD_REQUEST);
         }
 
-        // Check if contentTemplateId exists, if yes then delete the existing content
+        // Check if content_template_id exists, if yes then delete the existing content
         String checkSql = "SELECT COUNT(*) FROM FORM_CONTENT WHERE formID = ? AND content_template_id = ?";
-        int count = jdbcTemplate.queryForObject(checkSql, Integer.class, formId, contentTemplateId);
+        int count = jdbcTemplate.queryForObject(checkSql, Integer.class, formId, content_template_id);
         if (count > 0) {
             String deleteSql = "DELETE FROM FORM_CONTENT WHERE formID = ? AND content_template_id = ?";
-            jdbcTemplate.update(deleteSql, formId, contentTemplateId);
+            jdbcTemplate.update(deleteSql, formId, content_template_id);
         }
 
         // Fetch the template to determine the expected value type
         String sqlTemplate = "SELECT value_type FROM form_content_templates WHERE content_template_id = ?";
         String valueType;
         try {
-            valueType = jdbcTemplate.queryForObject(sqlTemplate, String.class, contentTemplateId);
+            valueType = jdbcTemplate.queryForObject(sqlTemplate, String.class, content_template_id);
         } catch (Exception e) {
-            return new ResponseEntity<>("Invalid contentTemplateId", HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("Invalid content_template_id", HttpStatus.BAD_REQUEST);
         }
 
         // Extract and cast the value based on value_type
-        Object rawValue = contentData.get("fieldValue");
+        Object rawValue = contentData.get("field_value");
         if (rawValue == null) {
-            return new ResponseEntity<>("fieldValue is required", HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("field_value is required", HttpStatus.BAD_REQUEST);
         }
-        String fieldValue;
+        String field_value;
         try {
             switch (valueType) {
                 case "NUMBER":
-                    fieldValue = String.valueOf(Double.parseDouble(rawValue.toString()));
+                    field_value = String.valueOf(Double.parseDouble(rawValue.toString()));
                     break;
                 case "TEXT":
                     if (rawValue instanceof Number || rawValue instanceof Boolean || rawValue instanceof LocalDate) {
-                        return new ResponseEntity<>("Invalid fieldValue for type TEXT: " + rawValue
+                        return new ResponseEntity<>("Invalid field_value for type TEXT: " + rawValue
                                 + ". Use type NUMBER if you intend to add a number, BOOLEAN if you intend to add a boolean, or DATE if you intend to add a date.",
                                 HttpStatus.BAD_REQUEST);
                     }
-                    fieldValue = rawValue.toString();
+                    field_value = rawValue.toString();
                     break;
                 case "BOOLEAN":
                     if (rawValue instanceof Boolean) {
-                        fieldValue = rawValue.toString();
+                        field_value = rawValue.toString();
                     } else {
-                        return new ResponseEntity<>("Invalid fieldValue for type BOOLEAN", HttpStatus.BAD_REQUEST);
+                        return new ResponseEntity<>("Invalid field_value for type BOOLEAN", HttpStatus.BAD_REQUEST);
                     }
                     break;
                 case "DATE":
                     try {
-                        fieldValue = LocalDate.parse(rawValue.toString()).toString();
+                        field_value = LocalDate.parse(rawValue.toString()).toString();
                     } catch (Exception e) {
                         return new ResponseEntity<>(
-                                "Invalid fieldValue for type DATE. Please use ISO format (e.g., '2025-03-22').",
+                                "Invalid field_value for type DATE. Please use ISO format (e.g., '2025-03-22').",
                                 HttpStatus.BAD_REQUEST);
                     }
                     break;
@@ -216,14 +255,14 @@ public class FormController {
                     return new ResponseEntity<>("Unsupported value_type: " + valueType, HttpStatus.BAD_REQUEST);
             }
         } catch (Exception e) {
-            return new ResponseEntity<>("Invalid fieldValue for type " + valueType + ": " + e.getMessage(),
+            return new ResponseEntity<>("Invalid field_value for type " + valueType + ": " + e.getMessage(),
                     HttpStatus.BAD_REQUEST);
         }
 
         // Insert into form_content
         String sql = "INSERT INTO FORM_CONTENT (formID, field_value, content_template_id) VALUES (?, ?, ?)";
         try {
-            jdbcTemplate.update(sql, formId, fieldValue, contentTemplateId);
+            jdbcTemplate.update(sql, formId, field_value, content_template_id);
             return new ResponseEntity<>("Form content added successfully", HttpStatus.CREATED);
         } catch (Exception e) {
             return new ResponseEntity<>("Error adding form content: " + e.getMessage(),
@@ -231,9 +270,31 @@ public class FormController {
         }
     }
 
-    // Add signature
-    @PostMapping("/{formId}/signatures")
-    public ResponseEntity<String> addSignature(HttpServletRequest request,
+    // Add signer - person you want to sign the form
+    @PostMapping("/{formId}/signature")
+    public ResponseEntity<String> addSigner(HttpServletRequest request,
+            @PathVariable String formId,
+            @RequestBody Map<String, Object> signerData) {
+        String sql = "INSERT INTO SIGNATURES (formID, username, signature_template_id) VALUES (?, ?, ?)";
+
+        // Log the debug information
+        System.out.println("Debug: Inserting into SIGNATURES with formID=" + formId +
+                ", username=" + signerData.get("username") +
+                ", signature_template_id=" + signerData.get("signature_template_id"));
+
+        jdbcTemplate.update(sql,
+                formId,
+                signerData.get("username"),
+                signerData.get("signature_template_id") != null
+                        ? Integer.parseInt(signerData.get("signature_template_id").toString())
+                        : null);
+
+        return new ResponseEntity<>("Signer added successfully", HttpStatus.CREATED);
+    }
+
+    // Signform
+    @PostMapping("/{formId}/sign")
+    public ResponseEntity<String> signForm(HttpServletRequest request,
             @PathVariable String formId,
             @RequestBody Map<String, Object> signatureData) {
         String username = (String) request.getAttribute("username");
@@ -256,8 +317,8 @@ public class FormController {
         }
         String enteredFirstName = nameParts[0];
         String enteredLastName = nameParts[1];
-        Integer enteredTitleId = signatureData.get("titleId") != null
-                ? Integer.parseInt(signatureData.get("titleId").toString())
+        Integer enteredTitleId = signatureData.get("title_id") != null
+                ? Integer.parseInt(signatureData.get("title_id").toString())
                 : null;
 
         if (!user.get("firstname").equals(enteredFirstName) || !user.get("lastname").equals(enteredLastName)
@@ -268,11 +329,11 @@ public class FormController {
         }
 
         // Validate titleID from signature template
-        Integer signatureTemplateId = signatureData.get("signatureTemplateId") != null
-                ? Integer.parseInt(signatureData.get("signatureTemplateId").toString())
+        Integer signatureTemplateId = signatureData.get("signature_template_id") != null
+                ? Integer.parseInt(signatureData.get("signature_template_id").toString())
                 : null;
         if (signatureTemplateId == null) {
-            return new ResponseEntity<>("signatureTemplateId is required", HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("signature_template_id is required", HttpStatus.BAD_REQUEST);
         }
 
         String templateSql = "SELECT title_id FROM signature_templates WHERE signature_template_id = ?";
@@ -280,7 +341,7 @@ public class FormController {
         try {
             templateTitleId = jdbcTemplate.queryForObject(templateSql, Integer.class, signatureTemplateId);
         } catch (Exception e) {
-            return new ResponseEntity<>("Invalid signatureTemplateId", HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("Invalid signature_template_id", HttpStatus.BAD_REQUEST);
         }
 
         if (!user.get("title_id").equals(templateTitleId) || !templateTitleId.equals(enteredTitleId)) {
@@ -290,7 +351,7 @@ public class FormController {
         }
 
         // Insert the signature
-        String sql = "INSERT INTO SIGNATURES (signature_template_id, formID, username, signature, decided_on, status, rejection_reason, title_id) "
+        String sql = "INSERT INTO SIGNATURES (signature_template_id, formid, username, signature, decided_on, status, rejection_reason, title_id) "
                 +
                 "VALUES (?, ?, ?, ?, ?, CAST(? AS form_status), ?, ?)";
 
@@ -299,10 +360,10 @@ public class FormController {
                 formId,
                 username,
                 signature,
-                signatureData.get("decidedOn") != null ? LocalDate.parse(signatureData.get("decidedOn").toString())
+                signatureData.get("decided_on") != null ? LocalDate.parse(signatureData.get("decided_on").toString())
                         : null,
                 signatureData.get("status"),
-                signatureData.get("rejectionReason"),
+                signatureData.get("rejection_reason"),
                 enteredTitleId);
 
         return new ResponseEntity<>("Signature added successfully", HttpStatus.CREATED);
@@ -313,17 +374,47 @@ public class FormController {
     public ResponseEntity<String> addAttachment(HttpServletRequest request,
             @PathVariable String formId,
             @RequestBody Map<String, Object> attachmentData) {
-        String username = (String) request.getAttribute("username");
-        String sql = "INSERT INTO ATTACHMENTS (formID, file_path, attatchment_template_id) " +
-                "VALUES (?, ?, ?)";
+        // Expecting file_content as base64 string
+        String sql = "INSERT INTO ATTACHMENTS (formID, attatchment_template_id, file_content) " +
+                "VALUES (?,?, ?)";
+        byte[] fileContentBytes = null;
+        if (attachmentData.get("file_content") != null) {
+            try {
+                String base64 = attachmentData.get("file_content").toString();
+                fileContentBytes = java.util.Base64.getDecoder().decode(base64);
+            } catch (Exception e) {
+                return new ResponseEntity<>("Invalid file_content: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+            }
+        }
 
         jdbcTemplate.update(sql,
                 formId,
-                attachmentData.get("filePath"),
-                attachmentData.get("attachmentTemplateId") != null
-                        ? Integer.parseInt(attachmentData.get("attachmentTemplateId").toString())
-                        : null);
+                attachmentData.get("attatchment_template_id") != null
+                        ? Integer.parseInt(attachmentData.get("attatchment_template_id").toString())
+                        : null,
+                fileContentBytes);
 
         return new ResponseEntity<>("Attachment added successfully", HttpStatus.CREATED);
     }
+
+    @GetMapping("/attachments/test-pdf")
+    public ResponseEntity<byte[]> getFirstPdfAttachment() {
+        String sql = "SELECT file_content FROM ATTACHMENTS WHERE file_content IS NOT NULL LIMIT 1";
+
+        try {
+            byte[] pdfBytes = jdbcTemplate.queryForObject(sql, byte[].class);
+
+            if (pdfBytes == null || pdfBytes.length == 0) {
+                return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+            }
+
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "inline; filename=\"test.pdf\"")
+                    .header("Content-Type", "application/pdf")
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
 }

@@ -16,8 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
-// DEFAULT FRONTEND URL
-@CrossOrigin(origins = "${frontend.url}")
+@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true", exposedHeaders = "Authorization")
 public class UserController {
 
     @Autowired
@@ -81,9 +80,8 @@ public class UserController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getCurrentUser(HttpServletRequest request) {
         String username = request.getAttribute("username").toString();
-        String sql = "SELECT u.*, c.password, ut.title " +
+        String sql = "SELECT u.*, ut.title " +
                 "FROM USERS u " +
-                "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
                 "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id " +
                 "WHERE u.username = ?";
 
@@ -138,11 +136,32 @@ public class UserController {
         return new ResponseEntity<>(user, HttpStatus.OK);
     }
 
-    // Update password
+    // Get all users with a specific title_id
+    @GetMapping("/by-title/{titleId}")
+    public ResponseEntity<List<Map<String, Object>>> getUsersByTitleId(@PathVariable int titleId) {
+        String sql = "SELECT u.*, ut.title " +
+                "FROM USERS u " +
+                "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id " +
+                "WHERE u.title_id = ?";
+
+        List<Map<String, Object>> users = jdbcTemplate.queryForList(sql, titleId);
+        return new ResponseEntity<>(users, HttpStatus.OK);
+    }
+
+    // Check if a username exists
+    @GetMapping("/check-username/{username}")
+    public ResponseEntity<Boolean> checkUsernameExists(@PathVariable String username) {
+        String sql = "SELECT COUNT(*) FROM USERS WHERE username = ?";
+        int count = jdbcTemplate.queryForObject(sql, Integer.class, username);
+        return new ResponseEntity<>(count > 0, HttpStatus.OK);
+    }
+
     @PutMapping("/reset-password")
-    public ResponseEntity<String> updatePassword(HttpServletRequest request,
+    public ResponseEntity<String> updatePassword(
             @RequestBody Map<String, String> data) {
-        String username = request.getAttribute("username").toString();
+
+        String username = data.get("username");
+
         String sql = "UPDATE CREDENTIALS SET password = ?, login_first_time = FALSE WHERE username = ?";
 
         // Generate new salt and hash new password
@@ -209,9 +228,9 @@ public class UserController {
         }
 
         // Fetch all users
-        String sql = "SELECT u.*, c.password, ut.title " +
+        String sql = "SELECT u.*, ut.title " +
                 "FROM USERS u " +
-                "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
+                // "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
                 "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id";
 
         List<Map<String, Object>> users = jdbcTemplate.queryForList(sql);
@@ -258,17 +277,15 @@ public class UserController {
         return new ResponseEntity<>(titles, HttpStatus.OK);
     }
 
-    // Add attachment template
-    @PostMapping("/{formTypeId}/attachment-templates")
-    public ResponseEntity<String> addAttachmentTemplate(@PathVariable String formTypeId,
-            @RequestBody Map<String, String> attachmentData) {
-        String sql = "INSERT INTO ATTACHMENT_TEMPLATES (formTypeID, file_type) " +
-                "VALUES (?, CAST(? AS file_type))";
-
-        jdbcTemplate.update(sql,
-                formTypeId,
-                attachmentData.get("fileType"));
-
-        return new ResponseEntity<>("Attachment template added successfully", HttpStatus.CREATED);
+    @GetMapping("/titles/{titleId}")
+    public ResponseEntity<Map<String, Object>> getTitleById(@PathVariable int titleId) {
+        try {
+            String sql = "SELECT title FROM USER_TITLES WHERE title_id = ?";
+            Map<String, Object> title = jdbcTemplate.queryForMap(sql, titleId);
+            return new ResponseEntity<>(title, HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(Map.of("error", "Title not found"), HttpStatus.NOT_FOUND);
+        }
     }
+
 }

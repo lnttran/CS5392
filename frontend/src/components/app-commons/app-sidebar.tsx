@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useEffect, useState } from "react";
+import { fetchWithAuth } from "@/lib/fetch";
 
 // Menu items.
 const AdministratorItems = [
@@ -40,7 +41,7 @@ const AdministratorItems = [
   },
   {
     title: "Application",
-    url: "/",
+    url: "/dashboard/application",
     icon: Inbox,
   },
   {
@@ -86,13 +87,13 @@ export function AppSidebar() {
   } | null>(null);
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem("token");
-      console.log(token, "token");
-      if (!token) return;
-
-      const res = await fetch("http://localhost:8080/api/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
 
       const data = await res.json();
       console.log(data, "data");
@@ -136,7 +137,7 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))
-                : UserItems.map((item) => (
+                : AdministratorItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
                         <a href={item.url}>

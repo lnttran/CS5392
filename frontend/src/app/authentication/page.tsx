@@ -14,11 +14,15 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("http://localhost:8080/api/users/login", {
-      method: "POST",
-      body: JSON.stringify(form),
-      headers: { "Content-Type": "application/json" },
-    });
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/login`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify(form),
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
     const data = await res.json();
 

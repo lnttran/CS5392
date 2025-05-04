@@ -30,7 +30,7 @@ export default function ResetPasswordPage() {
   };
 
   const passwordValidationRegex =
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#\$%&])[A-Za-z\d#\$%&]{6,}$/;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,15 +50,19 @@ export default function ResetPasswordPage() {
     console.log(form, "form");
 
     const res = await fetch(
-      `http://localhost:8080/api/users/${form.username}/reset-password`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/reset-password`,
       {
         method: "PUT",
-        body: JSON.stringify({ password: form.newPassword }),
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: form.newPassword, username: form.username }),
+        headers: {
+          "Content-Type": "application/json",
+        },
       }
     );
 
     const data = await res.text();
+    console.log(data, "data");
 
     if (res.ok) {
       setSuccess(data);
@@ -66,7 +70,7 @@ export default function ResetPasswordPage() {
 
       setTimeout(() => {
         router.push("/authentication");
-      }, 2000);
+      }, 200);
     } else {
       setError(data);
       setSuccess(null);

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Trash, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 // import { Textarea } from "@/components/ui/textarea"
@@ -14,25 +14,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useRouter } from "next/navigation";
+import {
+  AttachmentTemplate,
+  ContentTemplate,
+  FileType,
+  SignatureTemplate,
+  ValueType,
+} from "@/types/template";
+import { Title } from "@/types/title";
+import { toast } from "sonner";
+import { fetchWithAuth } from "@/lib/fetch";
 
 export default function CreateFormTemplate() {
-  const [formFields, setFormFields] = useState<string[]>([""]);
-  const [signatures, setSignatures] = useState<
-    { level: string; title: string }[]
-  >([{ level: "", title: "" }]);
+  const router = useRouter();
+  const [titles, setTitles] = useState<Title[]>([]);
+  const [content, setContent] = useState<ContentTemplate[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentTemplate[]>([]);
+  const [signatures, setSignatures] = useState<SignatureTemplate[]>([]);
+  const [formtypeid, setformtypeid] = useState("");
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
 
   const addFormField = () => {
-    setFormFields([...formFields, ""]);
+    setContent([
+      ...content,
+      {
+        field_name: "",
+        is_value_needed: true,
+        value_type: "TEXT", // must match your enum
+        description: "",
+      },
+    ]);
   };
 
   const removeFormField = (index: number) => {
-    const newFields = [...formFields];
+    const newFields = [...content];
     newFields.splice(index, 1);
-    setFormFields(newFields);
+    setContent(newFields);
   };
 
   const addSignature = () => {
-    setSignatures([...signatures, { level: "", title: "" }]);
+    setSignatures([
+      ...signatures,
+      {
+        title_id: "1", // default ID, can be adjusted with UI
+      },
+    ]);
   };
 
   const removeSignature = (index: number) => {
@@ -41,15 +70,147 @@ export default function CreateFormTemplate() {
     setSignatures(newSignatures);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const addAttachment = () => {
+    setAttachments([
+      ...attachments,
+      {
+        description: "",
+        file_type: "PDF", // default to one valid file_type
+      },
+    ]);
+  };
+
+  const removeAttachment = (index: number) => {
+    const newAttachments = [...attachments];
+    newAttachments.splice(index, 1);
+    setAttachments(newAttachments);
+  };
+
+  const fetchTitles = async () => {
+    try {
+      const response = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/titles`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        console.log(data, "titles");
+        setTitles(data);
+      } else {
+        toast.error("Failed to fetch titles");
+      }
+    } catch (error) {
+      toast.error("Failed to fetch titles");
+    }
+  };
+
+  useEffect(() => {
+    fetchTitles();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formtypeid || !formTitle || !formDescription) {
+      toast.error("Please fill in the form header fields.");
+      return;
+    }
+
+    // Validate content fields
+    for (const [i, field] of content.entries()) {
+      if (!field.field_name.trim()) {
+        toast.error(`Field name is required in content field #${i + 1}`);
+        return;
+      }
+      if (field.is_value_needed && !field.value_type) {
+        toast.error(`Value type is required in content field #${i + 1}`);
+        return;
+      }
+    }
+
+    // Validate attachments
+    for (const [i, attachment] of attachments.entries()) {
+      if (!attachment.file_type) {
+        toast.error(`File type is required for attachment #${i + 1}`);
+        return;
+      }
+    }
+
+    // Validate signatures
+    for (const [i, signature] of signatures.entries()) {
+      if (!signature.title_id || signature.title_id === "") {
+        toast.error(`Title ID is required for signature #${i + 1}`);
+        return;
+      }
+    }
+
+    const payload = {
+      formtypeid,
+      status: "ACTIVE",
+      title: formTitle,
+      description: formDescription,
+      contentTemplates: content.map((field) => ({
+        field_name: field.field_name,
+        is_value_needed: field.is_value_needed,
+        value_type: field.value_type.toUpperCase(), // must match ENUM
+        description: field.description,
+      })),
+      attachmentTemplates: attachments.map((att) => ({
+        file_type: att.file_type.toUpperCase(),
+        description: att.description,
+      })),
+      signatureTemplates: signatures.map((sig) => ({
+        title_id: Number(sig.title_id), // ensure it's a number
+      })),
+    };
+
+    try {
+      const res = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/form-templates`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json();
+      if (res.ok) {
+        setContent([]);
+        setAttachments([]);
+        setSignatures([]);
+        setformtypeid("");
+        setFormTitle("");
+        setFormDescription("");
+        alert("Form Template created successfully!");
+        router.back();
+      } else {
+        console.error("Error:", data);
+        alert("Failed to create form template.");
+      }
+    } catch (err) {
+      console.error("Submit error:", err);
+      alert("Something went wrong.");
+    }
     // Here you would typically send the form data to your backend
     console.log("Form submitted");
   };
 
   return (
     <div className="container mx-auto p-6 w-[80vw]">
-      <h1 className="text-3xl font-bold mb-6">Create New Form Template</h1>
+      <div className="flex items-center mb-6">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.back()}
+          className="mr-4"
+        >
+          <ArrowLeft className="h-8 w-8" />
+        </Button>
+        <h1 className="text-3xl font-bold">Create New Form Template</h1>
+      </div>
       <form onSubmit={handleSubmit}>
         <Card className="mb-6">
           <CardHeader>
@@ -57,11 +218,13 @@ export default function CreateFormTemplate() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="formTypeId">Form Type ID</Label>
+              <Label htmlFor="formtypeid">Form Type ID</Label>
               <Input
-                id="formTypeId"
+                id="formtypeid"
                 placeholder="Enter a unique identifier"
                 required
+                value={formtypeid}
+                onChange={(e) => setformtypeid(e.target.value)}
               />
             </div>
             <div>
@@ -70,11 +233,19 @@ export default function CreateFormTemplate() {
                 id="formTitle"
                 placeholder="Enter the form title"
                 required
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
               />
             </div>
             <div>
               <Label htmlFor="formDescription">Form Description</Label>
-              {/* <Textarea id="formDescription" placeholder="Enter a brief description of the form" required /> */}
+              <Textarea
+                id="formDescription"
+                placeholder="Enter a brief description of the form"
+                required
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -96,33 +267,162 @@ export default function CreateFormTemplate() {
             <CardTitle>Form Contents</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {formFields.map((field, index) => (
-              <div key={index} className="flex items-center space-x-2">
+            {content.map((field, index) => (
+              <div
+                key={index}
+                className="flex flex-col gap-2 p-3 border rounded-lg bg-gray-50"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder={`Field ${index + 1}`}
+                      value={field.field_name}
+                      onChange={(e) => {
+                        const newFields = [...content];
+                        newFields[index].field_name = e.target.value;
+                        setContent(newFields);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">
+                      Required:
+                    </Label>
+                    <Select
+                      value={field.is_value_needed ? "yes" : "no"}
+                      onValueChange={(value) => {
+                        const newFields = [...content];
+                        newFields[index].is_value_needed = value === "yes";
+                        setContent(newFields);
+                      }}
+                    >
+                      <SelectTrigger className="w-[80px]">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">Type:</Label>
+                    <Select
+                      value={field.value_type}
+                      onValueChange={(value) => {
+                        const newFields = [...content];
+                        newFields[index].value_type = value as ValueType;
+                        setContent(newFields);
+                      }}
+                    >
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TEXT">Text</SelectItem>
+                        <SelectItem value="NUMBER">Number</SelectItem>
+                        <SelectItem value="BOOLEAN">True/False</SelectItem>
+                        <SelectItem value="DATE">Date</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeFormField(index)}
+                    className="h-9 w-9"
+                  >
+                    <Trash className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+                {/* Optional description input */}
                 <Input
-                  placeholder={`Field ${index + 1}`}
-                  value={field}
+                  placeholder="Description (optional)"
+                  value={field.description}
                   onChange={(e) => {
-                    const newFields = [...formFields];
-                    newFields[index] = e.target.value;
-                    setFormFields(newFields);
+                    const newFields = [...content];
+                    newFields[index].description = e.target.value;
+                    setContent(newFields);
                   }}
+                  className="mt-1"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => removeFormField(index)}
-                >
-                  <Trash className="h-4 w-4" />
-                </Button>
               </div>
             ))}
             <Button
               type="button"
               onClick={addFormField}
-              className="bg-gradient-to-r from-[#5CADF8] from-0% via-[#5F5DF9] via-63% to-[#9B8BFC]  hover:bg-blue-500"
+              className="bg-gradient-to-r from-[#5CADF8] from-0% via-[#5F5DF9] via-63% to-[#9B8BFC] hover:bg-blue-500"
             >
               <Plus className="h-4 w-4 mr-2" /> Add Field
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Attachments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {attachments.map((attachment, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-4 p-3 border rounded-lg bg-gray-50"
+              >
+                <div className="flex-1">
+                  <Input
+                    placeholder={`Attachment ${index + 1}`}
+                    value={attachment.description}
+                    onChange={(e) => {
+                      const newAttachments = [...attachments];
+                      newAttachments[index].description = e.target.value;
+                      setAttachments(newAttachments);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm whitespace-nowrap">
+                    Allowed Types:
+                  </Label>
+                  <Select
+                    value={attachment.file_type}
+                    onValueChange={(value) => {
+                      const newAttachments = [...attachments];
+                      newAttachments[index].file_type = value as FileType;
+                      setAttachments(newAttachments);
+                    }}
+                  >
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="Select types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PDF">PDF</SelectItem>
+                      <SelectItem value="DOC">DOC</SelectItem>
+                      <SelectItem value="JPG">JPG</SelectItem>
+                      <SelectItem value="PNG">PNG</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeAttachment(index)}
+                  className="h-9 w-9"
+                >
+                  <Trash className="h-4 w-4 text-red-500" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              onClick={addAttachment}
+              className="bg-gradient-to-r from-[#5CADF8] from-0% via-[#5F5DF9] via-63% to-[#9B8BFC] hover:bg-blue-500"
+            >
+              <Plus className="h-4 w-4 mr-2" /> Add Attachment
             </Button>
           </CardContent>
         </Card>
@@ -133,40 +433,41 @@ export default function CreateFormTemplate() {
           </CardHeader>
           <CardContent className="space-y-4">
             {signatures.map((signature, index) => (
-              <div key={index} className="flex items-center space-x-2">
+              <div
+                key={index}
+                className="flex items-center gap-4 p-3 border rounded-lg bg-gray-50"
+              >
                 <Select
-                  value={signature.level}
+                  value={signature.title_id}
                   onValueChange={(value) => {
                     const newSignatures = [...signatures];
-                    newSignatures[index].level = value;
+                    newSignatures[index].title_id = value;
                     setSignatures(newSignatures);
                   }}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select level" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Level 1</SelectItem>
-                    <SelectItem value="2">Level 2</SelectItem>
-                    <SelectItem value="3">Level 3</SelectItem>
+                    {titles.map((title) => (
+                      <SelectItem
+                        key={title.title_id}
+                        value={String(title.title_id)}
+                      >
+                        {title.title}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  placeholder="Title (e.g., Instructor, Dean)"
-                  value={signature.title}
-                  onChange={(e) => {
-                    const newSignatures = [...signatures];
-                    newSignatures[index].title = e.target.value;
-                    setSignatures(newSignatures);
-                  }}
-                />
+
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   onClick={() => removeSignature(index)}
+                  className="h-9 w-9"
                 >
-                  <Trash className="h-4 w-4" />
+                  <Trash className="h-4 w-4 text-red-500" />
                 </Button>
               </div>
             ))}
