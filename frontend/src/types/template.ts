@@ -4,6 +4,7 @@ export type FileType = "PDF" | "DOC" | "JPG" | "PNG";
 export type FormStatus =
   | "DRAFT"
   | "SUBMITTED"
+  | "PENDING"
   | "APPROVED"
   | "REJECTED"
   | "INACTIVE"
@@ -36,11 +37,12 @@ export interface SignatureTemplateJS extends SignatureTemplate {
 export interface AttachmentTemplate {
   description: string;
   file_type: FileType;
+  is_required: boolean;
 }
 
 export interface AttachmentTemplateJS extends AttachmentTemplate {
   formtypeid: string;
-  attachment_template_id: number;
+  attachment_template_id: string;
 }
 
 // Main form template structure for POST request
@@ -48,10 +50,10 @@ export interface FormTemplateWithContents {
   formTypeId: string;
   status: FormStatus;
   title: string;
-  description: string;
-  contentTemplates: ContentTemplate[];
-  signatureTemplates: SignatureTemplate[];
-  attachmentTemplates?: AttachmentTemplate[];
+  description?: string;
+  contentTemplates: ContentTemplateJS[];
+  signatureTemplates: SignatureTemplateJS[];
+  attachmentTemplates?: AttachmentTemplateJS[];
 }
 export interface FormTemplate {
   formtypeid: string;

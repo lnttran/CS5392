@@ -54,7 +54,11 @@ export default function ResetPasswordPage() {
       {
         method: "PUT",
         credentials: "include",
-        body: JSON.stringify({ password: form.newPassword, username: form.username }),
+        body: JSON.stringify({
+          password: form.newPassword,
+          username: form.username,
+          currentPassword: form.oldPassword,
+        }),
         headers: {
           "Content-Type": "application/json",
         },

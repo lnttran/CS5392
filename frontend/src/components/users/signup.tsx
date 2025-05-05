@@ -159,35 +159,6 @@ export function Signup({
       );
 
       if (response.ok) {
-        // console.log("User created successfully:", data);
-
-        // const emailResponse = await fetch("/api/auth/send", {
-        //   method: "POST",
-        //   headers: {
-        //     "Content-Type": "application/json",
-        //   },
-        //   body: JSON.stringify({
-        //     username: userData.username,
-        //     password: userData.password,
-        //     email: userData.email,
-        //   }),
-        // });
-
-        // const emailData = await emailResponse.json();
-
-        // if (!emailResponse.ok) {
-        //   console.error("Error sending email:", emailData.error);
-        // } else {
-        //   console.log("Email sent successfully:", emailData);
-        //   toast("Account registered successfully", {
-        //     description: (
-        //       <div className="text-gray-600">
-        //         Please check the registered email for log in information
-        //       </div>
-        //     ),
-        //   });
-        // }
-        //add toast to inform user that account has been created
         toast("Account registered successfully", {
           description: (
             <div className="text-gray-600">

@@ -6,6 +6,7 @@ import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [form, setForm] = useState({ username: "", password: "" });
@@ -35,7 +36,7 @@ export default function LoginPage() {
         router.push("/dashboard"); // Redirect to dashboard if not first login
       }
     } else {
-      alert(data.error);
+      toast.error(data.error);
     }
   };
 

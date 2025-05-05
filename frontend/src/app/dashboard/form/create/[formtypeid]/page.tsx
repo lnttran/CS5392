@@ -66,29 +66,11 @@ export default function FormApplication() {
     new Map()
   );
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [applicantInfo, setApplicantInfo] = useState<User>();
   const [file, setFile] = useState<Record<string, File>>({});
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-
-  // const handleUpload = async () => {
-  //   if (!file) return;
-  //   setUploading(true);
-
-  //   const formData = new FormData();
-  //   formData.append("file", file);
-
-  //   // const res = await fetch("/api/upload", {
-  //   //   method: "POST",
-  //   //   body: formData,
-  //   // });
-
-  //   // if (res.ok) {
-  //   setMessage("File uploaded successfully!");
-  //   // } else {
-  //   //   setMessage("Upload failed");
-  //   // }
-  //   setUploading(false);
-  // };
+  const [users, setUsers] = useState<User[]>([]);
 
   const fetchUser = async () => {
     const res = await fetchWithAuth(
@@ -224,8 +206,6 @@ export default function FormApplication() {
       ...prev,
       [signature_template_id]: { username, title_id },
     }));
-
-    console.log(signerInfo, "signerInfo");
   };
 
   const renderInputField = (field: {
@@ -263,23 +243,76 @@ export default function FormApplication() {
         );
       case "BOOLEAN":
         return (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={field.name}
-              checked={(contentValues[field.templates_id] as boolean) || false}
-              onCheckedChange={(checked) =>
-                handleInputChange(field.templates_id, checked as boolean)
-              }
-            />
-            <label htmlFor={field.name} className="text-sm text-gray-500">
-              Yes
-            </label>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id={`${field.name}-true`}
+                checked={
+                  (contentValues[field.templates_id] as boolean) === true
+                }
+                onCheckedChange={(checked) =>
+                  handleInputChange(field.templates_id, checked === true)
+                }
+              />
+              <label
+                htmlFor={`${field.name}-true`}
+                className="text-sm text-gray-500"
+              >
+                Yes
+              </label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id={`${field.name}-false`}
+                checked={
+                  (contentValues[field.templates_id] as boolean) === false
+                }
+                onCheckedChange={(checked) =>
+                  handleInputChange(field.templates_id, checked === false)
+                }
+              />
+              <label
+                htmlFor={`${field.name}-false`}
+                className="text-sm text-gray-500"
+              >
+                No
+              </label>
+            </div>
           </div>
         );
       default:
         return null;
     }
   };
+
+  const fetchAllUsers = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/admin/all`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      const data = await res.json();
+      console.log(data, " allusers");
+
+      if (res.ok) {
+        setUsers(data);
+      } else {
+        console.error("Error fetching all users:", data.error);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (Number(currentUser?.level) === 4) {
+      fetchAllUsers();
+    }
+  }, [currentUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,24 +322,42 @@ export default function FormApplication() {
       return;
     }
 
+    // Check if user agreed to sign
+    if (!signatureInfo.agreed) {
+      toast.error("You must agree to sign this form before submitting.");
+      return;
+    }
+
     for (const [id, value] of Object.entries(contentValues)) {
       if (typeof value === "string" && value == "") {
         toast.error(`Need to fill all the boxes.`);
       }
     }
 
-    // Validate attachments
-    for (const [id, value] of Object.entries(file)) {
-      if (!value) {
-        toast.error(`Please provide required attachment for your application.`);
+    // Loop through attachment templates to validate required attachments
+    for (const attachment of attachmentTemplates) {
+      if (attachment.is_required && !file[attachment.attachment_template_id]) {
+        toast.error(
+          `Please upload the required attachment: ${attachment.description}`
+        );
         return;
       }
     }
 
-    // Validate signatures
-    for (const [id, value] of Object.entries(signerInfo)) {
-      if (!value || value.title_id === "" || value.username === "") {
-        toast.error(`Please select signer for your application.`);
+    for (const signature of signatureTemplates) {
+      if (!signerInfo[signature.signature_template_id]) {
+        toast.error(`Please select a signer for the signatures`);
+        return;
+      }
+    }
+
+    for (const content of contentTemplates) {
+      if (
+        (content.is_value_needed &&
+          contentValues[content.content_template_id] === undefined) ||
+        ""
+      ) {
+        toast.error(`Please fill in the required field: ${content.field_name}`);
         return;
       }
     }
@@ -315,20 +366,49 @@ export default function FormApplication() {
     const attachments: any[] = [];
     for (const [key, value] of Object.entries(file)) {
       if (value) {
-        const base64 = await fileToBase64(value as File);
-        attachments.push({
-          formid: applicationId,
-          attachment_template_id: key,
-          file_content: base64,
-        });
+        const mimeType = value.type;
+        console.log(`Processing file with key: ${key}, type: ${mimeType}`);
+        if (
+          ![
+            "application/pdf",
+            "text/plain",
+            "image/jpeg",
+            "image/png",
+          ].includes(mimeType)
+        ) {
+          console.error(`Unsupported file type: ${mimeType}`);
+          toast.error(`Unsupported file type: ${mimeType}`);
+          return;
+        }
+        try {
+          const base64 = await fileToBase64(value as File);
+          console.log(`File converted to base64 for key: ${key}`);
+          attachments.push({
+            formid: applicationId,
+            attachment_template_id: key,
+            file_content: base64,
+            file_type: mimeType,
+            mime_type: mimeType,
+          });
+        } catch (error) {
+          console.error(
+            `Error converting file to base64 for key: ${key}`,
+            error
+          );
+          toast.error(`Failed to process file for key: ${key}`);
+          return;
+        }
+      } else {
+        console.warn(`No file found for key: ${key}`);
       }
     }
+    console.log("Final attachments array:", attachments);
 
     const payload = {
       formid: applicationId,
       formtypeid: formtypeid,
       status: "SUBMITTED",
-      username: currentUser.username,
+      username: applicantInfo ? applicantInfo.username : currentUser.username,
       created_data: signatureInfo.dateSigned,
       last_updated: signatureInfo.dateSigned,
       contents: Object.entries(contentValues).map(([key, value]) => ({
@@ -361,15 +441,15 @@ export default function FormApplication() {
         setContentValues({});
         setFile({});
         setSignerInfo({});
-        alert("Form Template created successfully!");
-        router.back();
+        toast("Form Template created successfully!");
+        router.push("/dashboard/form");
       } else {
         console.error("Error:", data);
-        alert("Failed to create form template.");
+        toast("Failed to create form template.");
       }
     } catch (err) {
       console.error("Submit error:", err);
-      alert("Something went wrong.");
+      toast.error("Something went wrong.");
     }
     // Here you would typically send the form data to your backend
     console.log("Form submitted");
@@ -419,40 +499,84 @@ export default function FormApplication() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="level">Level </Label>
-              <Input id="level" defaultValue={currentUser?.level} disabled />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="title">Title </Label>
-              <Input id="title" defaultValue={currentUser?.title} disabled />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name </Label>
-              <Input
-                id="firstName"
-                defaultValue={currentUser?.firstname}
-                disabled
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name </Label>
-              <Input
-                id="lastName"
-                placeholder="Enter last name"
-                defaultValue={currentUser?.lastname}
-                disabled
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="formId">Form ID </Label>
-              <Input
-                id="formId"
-                placeholder="Enter form ID"
-                defaultValue={applicationId}
-                disabled
-              />
-            </div>
+            {Number(currentUser?.level) === 4 ? (
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="username">Select Username </Label>
+                <Select
+                  onValueChange={(username) => {
+                    setApplicantInfo(
+                      users.find((user) => user.username === username)
+                    );
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a username" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user, index) => (
+                      <SelectItem key={index} value={user.username}>
+                        {user.firstname} {user.lastname} - Level {user.level} -{" "}
+                        {user.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="formId">Form ID </Label>
+                  <Input
+                    id="formId"
+                    placeholder="Enter form ID"
+                    defaultValue={applicationId}
+                    disabled
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="level">Level </Label>
+                  <Input
+                    id="level"
+                    defaultValue={currentUser?.level}
+                    disabled
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title </Label>
+                  <Input
+                    id="title"
+                    defaultValue={currentUser?.title}
+                    disabled
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name </Label>
+                  <Input
+                    id="firstName"
+                    defaultValue={currentUser?.firstname}
+                    disabled
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name </Label>
+                  <Input
+                    id="lastName"
+                    placeholder="Enter last name"
+                    defaultValue={currentUser?.lastname}
+                    disabled
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="formId">Form ID </Label>
+                  <Input
+                    id="formId"
+                    placeholder="Enter form ID"
+                    defaultValue={applicationId}
+                    disabled
+                  />
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -556,32 +680,14 @@ export default function FormApplication() {
                       <span className="font-medium">
                         {attachment.description}
                       </span>
+                      {attachment.is_required && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
                     </div>
-
-                    {/* <button
-                  onClick={handleUpload}
-                  disabled={!file || uploading}
-                  className={`w-full px-4 py-2 rounded-md text-white font-semibold
-                 ${uploading || !file ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
-                >
-                  {uploading ? "Uploading..." : "Upload File"}
-                </button> */}
-
-                    {/* {message && (
-                  <div
-                    className={`text-sm font-medium ${
-                      message.includes("success")
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {message}
-                  </div>
-                )} */}
 
                     <div className="space-y-2">
                       <input
-                        id="file-upload"
+                        id={`file-upload-${index}`}
                         type="file"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -640,7 +746,8 @@ export default function FormApplication() {
                         {(usersByTitle.get(signatureTitles[index]) || []).map(
                           (user, i) => (
                             <SelectItem key={i} value={`${user.username}`}>
-                              {user.firstname} {user.lastname}
+                              {user.firstname} {user.lastname} - Level{" "}
+                              {user.level}
                             </SelectItem>
                           )
                         )}
@@ -679,9 +786,11 @@ export default function FormApplication() {
                 <Label htmlFor="signature">Signature </Label>
                 <div className="border rounded-md p-4 h-32 flex items-center justify-center bg-gray-50">
                   <p className="text-gray-500 text-center">
-                    {currentUser?.firstname && currentUser?.lastname
-                      ? `${currentUser.firstname} ${currentUser.lastname}`
-                      : "Your signature will appear here"}
+                    {applicantInfo?.firstname && applicantInfo?.lastname
+                      ? `${applicantInfo.firstname} ${applicantInfo.lastname}`
+                      : currentUser?.firstname && currentUser?.lastname
+                        ? `${currentUser.firstname} ${currentUser.lastname}`
+                        : "Your signature will appear here"}
                   </p>
                 </div>
               </div>

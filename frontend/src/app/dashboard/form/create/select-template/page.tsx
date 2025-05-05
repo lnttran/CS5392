@@ -82,38 +82,40 @@ export default function SelectTemplatePage() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-10">
-          {templates.map((template) => (
-            <Card
-              key={template.formtypeid}
-              className={`overflow-hidden transition-all cursor-pointer hover:shadow-md ${
-                selectedTemplateId === template.formtypeid
-                  ? "ring-2 ring-primary ring-offset-2"
-                  : "border"
-              }`}
-              onClick={() => handleSelect(template.formtypeid)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="mt-4">{template.title}</CardTitle>
+          {templates
+            .filter((template) => template.status === "ACTIVE")
+            .map((template) => (
+              <Card
+                key={template.formtypeid}
+                className={`overflow-hidden transition-all cursor-pointer hover:shadow-md ${
+                  selectedTemplateId === template.formtypeid
+                    ? "ring-2 ring-primary ring-offset-2"
+                    : "border"
+                }`}
+                onClick={() => handleSelect(template.formtypeid)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="mt-4">{template.title}</CardTitle>
 
-                  {selectedTemplateId === template.formtypeid && (
-                    <div className="rounded-full bg-primary p-1">
-                      <Check className="h-4 w-4 text-primary-foreground" />
-                    </div>
-                  )}
-                </div>
+                    {selectedTemplateId === template.formtypeid && (
+                      <div className="rounded-full bg-primary p-1">
+                        <Check className="h-4 w-4 text-primary-foreground" />
+                      </div>
+                    )}
+                  </div>
 
-                <CardDescription className="pt-5">
-                  {template.description}
-                </CardDescription>
-              </CardHeader>
-              {/* <CardContent>
-                <div className="text-sm text-muted-foreground">
-                  {template.description} fields included
-                </div>
-              </CardContent> */}
-            </Card>
-          ))}
+                  <CardDescription className="pt-5">
+                    {template.description}
+                  </CardDescription>
+                </CardHeader>
+                {/* <CardContent>
+              <div className="text-sm text-muted-foreground">
+                {template.description} fields included
+              </div>
+            </CardContent> */}
+              </Card>
+            ))}
         </div>
 
         <div className="flex justify-center">

@@ -28,28 +28,26 @@ import { fetchWithAuth } from "@/lib/fetch";
 export default function TemplatePage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
-
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        const res = await fetchWithAuth(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/form-templates`,
-          {
-            method: "GET",
-          }
-        );
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch templates");
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/form-templates`,
+        {
+          method: "GET",
         }
+      );
 
-        const data = await res.json();
-        setTemplates(data);
-      } catch (err) {
-        console.error("Error fetching templates:", err);
+      if (!res.ok) {
+        throw new Error("Failed to fetch templates");
       }
-    };
 
+      const data = await res.json();
+      setTemplates(data);
+    } catch (err) {
+      console.error("Error fetching templates:", err);
+    }
+  };
+  useEffect(() => {
     fetchTemplates();
   }, []);
 
@@ -82,7 +80,7 @@ export default function TemplatePage() {
                     <TableCell>{template.formtypeid}</TableCell>
                     <TableCell>{template.title}</TableCell>
                     <TableCell>{template.status}</TableCell>
-                    <TableCell className="text-left">
+                    <TableCell className="text-left flex gap-2">
                       <Button
                         variant="outline"
                         onClick={() =>
@@ -92,6 +90,38 @@ export default function TemplatePage() {
                         }
                       >
                         View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const isInactive = template.status === "INACTIVE";
+                            const action = isInactive ? "unarchive" : "archive";
+                            const res = await fetchWithAuth(
+                              `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/form-templates/${template.formtypeid}/${action}`,
+                              {
+                                method: "POST",
+                                credentials: "include",
+                              }
+                            );
+
+                            if (!res.ok) {
+                              throw new Error(`Failed to ${action} template`);
+                            }
+
+                            toast.success(
+                              `Template ${isInactive ? "unarchived" : "archived"} successfully`
+                            );
+                            fetchTemplates();
+                          } catch (err) {
+                            console.error(`Error toggling archive state:`, err);
+                            toast.error("Failed to toggle archive state");
+                          }
+                        }}
+                      >
+                        {template.status === "INACTIVE"
+                          ? "Unarchive"
+                          : "Archive"}
                       </Button>
                     </TableCell>
                   </TableRow>

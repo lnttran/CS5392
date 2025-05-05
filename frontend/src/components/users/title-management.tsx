@@ -111,21 +111,24 @@ export function TitleManagement() {
     }
   };
 
-  const handleDeleteTitle = async (id: string) => {
+  const deleteTitle = async (id: string) => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/titles/${id}`,
+      const response = await fetchWithAuth(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/titles/${id}`,
         {
           method: "DELETE",
         }
       );
 
       if (response.ok) {
-        setTitles(titles.filter((title) => title.title_id !== id));
+        fetchTitles();
         toast.success("Title deleted successfully");
       } else {
         const error = await response.json();
-        toast.error(error.message || "Failed to delete title");
+        toast.error(
+          error.message ||
+            "Cannot delete title because it is associated with other tables"
+        );
       }
     } catch (error) {
       toast.error("Failed to delete title");
@@ -185,7 +188,6 @@ export function TitleManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Title Name</TableHead>
-
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -193,15 +195,16 @@ export function TitleManagement() {
                 {titles.map((title) => (
                   <TableRow key={title.title_id}>
                     <TableCell className="font-medium">{title.title}</TableCell>
-
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteTitle(title.title_id)}
-                      >
-                        <Trash className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTitle(title.title_id)}
+                        >
+                          <Trash className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

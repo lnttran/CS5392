@@ -1,5 +1,6 @@
 package com.example.backend.controller;
 
+import com.example.backend.service.EmailService;
 import com.example.backend.util.JwtUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,9 @@ public class UserController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EmailService emailService;
 
     private ResponseEntity<String> checkRequiredFields(Map<String, String> data, String[] requiredFields) {
         for (String field : requiredFields) {
@@ -64,8 +68,8 @@ public class UserController {
         jdbcTemplate.update(userSql,
                 userData.get("username"),
                 Integer.parseInt(userData.get("titleId")),
-                userData.get("firstname"),
-                userData.get("lastname"),
+                userData.get("firstname").trim(),
+                userData.get("lastname").trim(),
                 userData.get("level") != null ? Integer.parseInt(userData.get("level")) : null,
                 userData.get("email"));
 
@@ -73,6 +77,14 @@ public class UserController {
                 userData.get("username"),
                 hashedPassword);
 
+        // Send email notification
+        String emailSubject = "SMU Form Application: We have successfully registered your account";
+        String emailBody = "Please use below credentials to log in to our application. We will request you change your password for security\n"
+                +
+                "Username: " + userData.get("username") + "\n" +
+                "Password: " + userData.get("username") + "\n";
+        ;
+        emailService.sendMessage(userData.get("email"), emailSubject, emailBody);
         return new ResponseEntity<>("User created successfully", HttpStatus.CREATED);
     }
 
@@ -126,9 +138,8 @@ public class UserController {
     // Get user with credentials and title
     @GetMapping("/{username}")
     public ResponseEntity<Map<String, Object>> getUser(@PathVariable String username) {
-        String sql = "SELECT u.*, c.password, ut.title " +
+        String sql = "SELECT u.*, ut.title " +
                 "FROM USERS u " +
-                "LEFT JOIN CREDENTIALS c ON u.username = c.username " +
                 "LEFT JOIN USER_TITLES ut ON u.title_id = ut.title_id " +
                 "WHERE u.username = ?";
 
@@ -161,15 +172,40 @@ public class UserController {
             @RequestBody Map<String, String> data) {
 
         String username = data.get("username");
+        String currentPassword = data.get("currentPassword");
+        String newPassword = data.get("password");
 
-        String sql = "UPDATE CREDENTIALS SET password = ?, login_first_time = FALSE WHERE username = ?";
+        // If currentPassword is not provided, return bad request
+        if (currentPassword == null || currentPassword.isEmpty()) {
+            return new ResponseEntity<>("Current password must be provided", HttpStatus.BAD_REQUEST);
+        }
 
-        // Generate new salt and hash new password
-        String plainPassword = data.get("password");
+        // Fetch the current hashed password from the database
+        String fetchPasswordSql = "SELECT password FROM CREDENTIALS WHERE username = ?";
+        String storedHash;
+        try {
+            storedHash = jdbcTemplate.queryForObject(fetchPasswordSql, String.class, username);
+        } catch (EmptyResultDataAccessException e) {
+            return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+        }
+
+        // Verify the current password
+        if (!BCrypt.checkpw(currentPassword, storedHash)) {
+            return new ResponseEntity<>("Current password is incorrect", HttpStatus.UNAUTHORIZED);
+        }
+
+        System.out.println(
+                "Current password is correct - BCrypt check passed" + BCrypt.checkpw(currentPassword, storedHash)); // Debug
+                                                                                                                    // log
+
+        // Generate new salt and hash the new password
         String salt = BCrypt.gensalt();
-        String hashedPassword = BCrypt.hashpw(plainPassword, salt);
+        String hashedPassword = BCrypt.hashpw(newPassword, salt);
 
-        jdbcTemplate.update(sql, hashedPassword, username);
+        // Update the password in the database
+        String updatePasswordSql = "UPDATE CREDENTIALS SET password = ?, login_first_time = FALSE WHERE username = ?";
+        jdbcTemplate.update(updatePasswordSql, hashedPassword, username);
+
         return new ResponseEntity<>("Password updated successfully", HttpStatus.OK);
     }
 
@@ -192,6 +228,21 @@ public class UserController {
             int userCount = jdbcTemplate.queryForObject(checkSql, Integer.class, username);
             if (userCount == 0) {
                 return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+            }
+
+            // Check for foreign key usage in other tables
+            String[] referenceChecks = {
+                    "SELECT COUNT(*) FROM FORMS WHERE username = ?",
+                    "SELECT COUNT(*) FROM SIGNATURES WHERE username = ?"
+            };
+
+            for (String query : referenceChecks) {
+                int count = jdbcTemplate.queryForObject(query, Integer.class, username);
+                if (count > 0) {
+                    return new ResponseEntity<>(
+                            "Cannot delete user: referenced in other data (e.g., forms or signatures)",
+                            HttpStatus.CONFLICT);
+                }
             }
 
             // Delete credentials first, then user
@@ -286,6 +337,44 @@ public class UserController {
         } catch (Exception e) {
             return new ResponseEntity<>(Map.of("error", "Title not found"), HttpStatus.NOT_FOUND);
         }
+    }
+
+    // delete user title
+    @DeleteMapping("/titles/{titleId}")
+    public ResponseEntity<String> deleteUserTitle(@PathVariable int titleId) {
+        // Check references in USERS, SIGNATURE_TEMPLATES, SIGNATURES
+        String dependencyCheck = """
+                    SELECT EXISTS (
+                        SELECT 1 FROM users WHERE title_id = ?
+                        UNION
+                        SELECT 1 FROM signature_templates WHERE title_id = ?
+                        UNION
+                        SELECT 1 FROM signatures WHERE title_id = ?
+                    )
+                """;
+
+        Boolean isReferenced = jdbcTemplate.queryForObject(dependencyCheck, Boolean.class, titleId, titleId, titleId);
+
+        if (Boolean.TRUE.equals(isReferenced)) {
+            return new ResponseEntity<>("Cannot delete: title_id is referenced in other tables", HttpStatus.CONFLICT);
+        }
+
+        // Safe to delete
+        String deleteSql = "DELETE FROM user_titles WHERE title_id = ?";
+        int rowsAffected = jdbcTemplate.update(deleteSql, titleId);
+
+        if (rowsAffected == 0) {
+            return new ResponseEntity<>("No such title_id found", HttpStatus.NOT_FOUND);
+        }
+
+        return new ResponseEntity<>("Title deleted successfully", HttpStatus.OK);
+    }
+
+    @GetMapping("/test-email")
+    public ResponseEntity<String> testEmail() {
+        System.out.println("Sending test email...");
+        emailService.sendMessage("vuhongson1412@gmail.com", "This is a test email", "This is a test email!");
+        return new ResponseEntity<>("Email sent successfully", HttpStatus.OK);
     }
 
 }

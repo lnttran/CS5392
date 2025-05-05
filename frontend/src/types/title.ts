@@ -5,7 +5,7 @@ export interface Title {
   title: string;
 }
 
-export async function getTitleById(titleId: number): Promise<string | null> {
+export async function getTitleById(titleId: string): Promise<string | null> {
   try {
     const res = await fetchWithAuth(
       `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/titles/${titleId}`,

@@ -29,8 +29,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { fetchWithAuth } from "@/lib/fetch";
+import { Dialog } from "@/components/ui/dialog";
+import {
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@react-email/components";
+import { User } from "@/types/user";
 
 // Menu items.
 const AdministratorItems = [
@@ -40,8 +49,8 @@ const AdministratorItems = [
     icon: Home,
   },
   {
-    title: "Application",
-    url: "/dashboard/application",
+    title: "Review",
+    url: "/dashboard/review",
     icon: Inbox,
   },
   {
@@ -55,7 +64,7 @@ const AdministratorItems = [
     icon: Users,
   },
   {
-    title: "My form",
+    title: "All forms",
     url: "/dashboard/form",
     icon: Settings,
   },
@@ -72,19 +81,29 @@ const UserItems = [
     url: "/dashboard/form",
     icon: Settings,
   },
+];
+const upperUserItems = [
   {
-    title: "Notification",
-    url: "/dashboard/notification",
-    icon: Bell,
+    title: "Dashboard",
+    url: "/",
+    icon: Home,
+  },
+  {
+    title: "Review",
+    url: "/dashboard/review",
+    icon: Inbox,
+  },
+  {
+    title: "My form",
+    url: "/dashboard/form",
+    icon: Settings,
   },
 ];
 
 export function AppSidebar() {
-  const [currentUser, setCurrentUser] = useState<{
-    firstName: string;
-    lastName: string;
-    level: string;
-  } | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+
   useEffect(() => {
     const fetchUser = async () => {
       const res = await fetchWithAuth(
@@ -98,11 +117,7 @@ export function AppSidebar() {
       const data = await res.json();
       console.log(data, "data");
       if (res.ok) {
-        setCurrentUser({
-          firstName: data.firstname,
-          lastName: data.lastname,
-          level: data.level,
-        });
+        setCurrentUser(data);
       } else {
         console.error("Error fetching user:", data.error);
       }
@@ -124,31 +139,23 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {currentUser?.level === "4"
-                ? AdministratorItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <a href={item.url}>
-                          <div>
-                            <item.icon size={20} />
-                          </div>
-                          <div className="text-lg">{item.title}</div>
-                        </a>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))
-                : AdministratorItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <a href={item.url}>
-                          <div>
-                            <item.icon size={20} />
-                          </div>
-                          <div className="text-lg">{item.title}</div>
-                        </a>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+              {(Number(currentUser?.level) === 4
+                ? AdministratorItems
+                : Number(currentUser?.level) === 0
+                  ? UserItems
+                  : upperUserItems
+              ).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <a href={item.url}>
+                      <div>
+                        <item.icon size={20} />
+                      </div>
+                      <div className="text-lg">{item.title}</div>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -164,7 +171,7 @@ export function AppSidebar() {
                   </div>
                   <div className="text-lg">
                     {currentUser
-                      ? `${currentUser.firstName} ${currentUser.lastName}`
+                      ? `${currentUser.firstname} ${currentUser.lastname}`
                       : "Username"}
                   </div>
                   <ChevronUp className="ml-auto" size={20} />
@@ -174,10 +181,9 @@ export function AppSidebar() {
                 side="top"
                 className="w-[--radix-popper-anchor-width]"
               >
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowProfile(true)}>
                   <span>Setting</span>
                 </DropdownMenuItem>
-
                 <DropdownMenuItem onClick={signOut}>
                   <span>Sign out</span>
                 </DropdownMenuItem>
@@ -186,6 +192,43 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      {/* Profile Dialog */}
+      <Dialog open={showProfile} onOpenChange={setShowProfile}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Personal Information</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div>
+              <span className="font-semibold">First Name: </span>
+              <span>{currentUser?.firstname || "-"}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Last Name: </span>
+              <span>{currentUser?.lastname || "-"}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Username: </span>
+              <span>{currentUser?.username || "-"}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Email: </span>
+              <span>{currentUser?.email || "-"}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Level: </span>
+              <span>{currentUser?.level || "-"}</span>
+            </div>
+            <div>
+              <span className="font-semibold">Title: </span>
+              <span>{currentUser?.title || "-"}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowProfile(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   );
 }

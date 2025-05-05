@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.backend.util.JwtUtil;
+import com.example.backend.service.EmailService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
@@ -15,10 +16,14 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/forms")
+@CrossOrigin(origins = "http://localhost:3000", exposedHeaders = "Content-Disposition")
 public class FormController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EmailService emailService;
 
     // Create a new form
     @PostMapping
@@ -28,7 +33,14 @@ public class FormController {
                 "VALUES (?, ?, ?, CAST(? AS form_status), ?, ?)";
 
         String formid = (String) formData.get("formid");
+
         String username = (String) request.getAttribute("username");
+        String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+        int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+        if (level == 4) {
+            username = (String) formData.get("username");
+        }
+
         try {
             jdbcTemplate.update(sql,
                     formid,
@@ -94,15 +106,15 @@ public class FormController {
 
     // Get form details including content, signatures, and attachments
     @GetMapping("/{formId}")
-    public ResponseEntity<Map<String, Object>> getForm(@RequestHeader("Authorization") String token,
+    public ResponseEntity<Map<String, Object>> getForm(
             @PathVariable String formId) {
-        String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
+        // String username = JwtUtil.extractUsername(token.replace("Bearer ", ""));
         String sql = "SELECT f.*, ft.title, ft.description " +
                 "FROM FORMS f " +
                 "JOIN FORM_TEMPLATES ft ON f.formTypeID = ft.formTypeID " +
-                "WHERE f.formID = ? AND f.username = ?";
+                "WHERE f.formID = ?";
 
-        Map<String, Object> form = jdbcTemplate.queryForMap(sql, formId, username);
+        Map<String, Object> form = jdbcTemplate.queryForMap(sql, formId);
 
         // Get form content
         String contentSql = "SELECT * FROM FORM_CONTENT WHERE formID = ?";
@@ -119,7 +131,50 @@ public class FormController {
         List<Map<String, Object>> attachments = jdbcTemplate.queryForList(attachmentSql, formId);
         form.put("attachments", attachments);
 
+        // Get next signer
+        Integer nextSigner = getNextSignerLevel(formId);
+        if (nextSigner != null) {
+            form.put("next_signer_level", nextSigner);
+        } else {
+            form.put("next_signer_level", "-1");
+        }
+
         return new ResponseEntity<>(form, HttpStatus.OK);
+    }
+
+    private Integer getNextSignerLevel(String formId) {
+        String sql = """
+                    SELECT u.level
+                    FROM users u
+                    INNER JOIN signature_templates st ON u.title_id = st.title_id
+                    INNER JOIN forms f ON f.formid = ?
+                    INNER JOIN signatures s ON s.username = u.username AND s.formid = f.formid
+                    WHERE st.formtypeid = f.formtypeid
+                      AND s.status = 'PENDING'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM users u2
+                          INNER JOIN signature_templates st2 ON u2.title_id = st2.title_id
+                          INNER JOIN signatures s2 ON s2.username = u2.username AND s2.formid = f.formid
+                          WHERE st2.formtypeid = f.formtypeid
+                            AND u2.level < u.level
+                            AND s2.status != 'APPROVED'
+                      )
+                    ORDER BY u.level
+                    LIMIT 1
+                """;
+
+        List<Map<String, Object>> result = jdbcTemplate.queryForList(sql, formId);
+        if (result.isEmpty()) {
+            return null;
+        }
+        // Check if the form status is rejected
+        String formStatusSql = "SELECT status FROM forms WHERE formid = ?";
+        String formStatus = jdbcTemplate.queryForObject(formStatusSql, String.class, formId);
+        if ("REJECTED".equals(formStatus)) {
+            return -1;
+        }
+        return (Integer) result.get(0).get("level");
     }
 
     // Update form status
@@ -143,23 +198,43 @@ public class FormController {
     @DeleteMapping("/{formId}")
     public ResponseEntity<String> deleteForm(HttpServletRequest request,
             @PathVariable String formId) {
-        String username = (String) request.getAttribute("username");
 
-        // Delete related records in dependent tables
-        String deleteContentSql = "DELETE FROM FORM_CONTENT WHERE formID = ?";
-        jdbcTemplate.update(deleteContentSql, formId);
+        try {
+            String username = (String) request.getAttribute("username");
 
-        String deleteSignaturesSql = "DELETE FROM SIGNATURES WHERE formID = ?";
-        jdbcTemplate.update(deleteSignaturesSql, formId);
+            // Get user level
+            String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+            int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
 
-        String deleteAttachmentsSql = "DELETE FROM ATTACHMENTS WHERE formID = ?";
-        jdbcTemplate.update(deleteAttachmentsSql, formId);
+            // If not admin, check ownership
+            if (level != 4) {
+                String checkSql = "SELECT COUNT(*) FROM FORMS WHERE formID = ? AND username = ?";
+                Integer count = jdbcTemplate.queryForObject(checkSql, Integer.class, formId, username);
+                if (count == null || count == 0) {
+                    return new ResponseEntity<>("Form not found or access denied", HttpStatus.NOT_FOUND);
+                }
+            }
 
-        // Delete the form itself
-        String deleteFormSql = "DELETE FROM FORMS WHERE formID = ? AND username = ?";
-        jdbcTemplate.update(deleteFormSql, formId, username);
+            // Delete related records
+            jdbcTemplate.update("DELETE FROM FORM_CONTENT WHERE formID = ?", formId);
+            jdbcTemplate.update("DELETE FROM SIGNATURES WHERE formID = ?", formId);
+            jdbcTemplate.update("DELETE FROM ATTACHMENTS WHERE formID = ?", formId);
 
-        return new ResponseEntity<>("Form deleted successfully", HttpStatus.OK);
+            // Delete form
+            String deleteFormSql = (level == 4)
+                    ? "DELETE FROM FORMS WHERE formID = ?"
+                    : "DELETE FROM FORMS WHERE formID = ? AND username = ?";
+            if (level == 4) {
+                jdbcTemplate.update(deleteFormSql, formId);
+            } else {
+                jdbcTemplate.update(deleteFormSql, formId, username);
+            }
+
+            return new ResponseEntity<>("Form deleted successfully", HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error deleting form: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Get all forms
@@ -170,6 +245,22 @@ public class FormController {
                 "FROM FORMS f " +
                 "JOIN FORM_TEMPLATES ft ON f.formTypeID = ft.formTypeID " +
                 "WHERE f.username = ?";
+
+        List<Map<String, Object>> forms = jdbcTemplate.queryForList(sql, username);
+        return new ResponseEntity<>(forms, HttpStatus.OK);
+    }
+
+    // Get forms associated with signatures for a given username, including
+    // signature status
+    @GetMapping("/review-forms")
+    public ResponseEntity<List<Map<String, Object>>> getFormsBySignatureUsername(HttpServletRequest request) {
+        String username = (String) request.getAttribute("username");
+
+        String sql = "SELECT f.*, s.status AS signature_status, ft.title AS title " +
+                "FROM forms f " +
+                "JOIN signatures s ON f.formid = s.formid " +
+                "JOIN form_templates ft ON f.formtypeid = ft.formtypeid " +
+                "WHERE s.username = ?";
 
         List<Map<String, Object>> forms = jdbcTemplate.queryForList(sql, username);
         return new ResponseEntity<>(forms, HttpStatus.OK);
@@ -292,8 +383,18 @@ public class FormController {
         return new ResponseEntity<>("Signer added successfully", HttpStatus.CREATED);
     }
 
+    // Get all signatures for a form
+    @GetMapping("/{formId}/signatures")
+    public ResponseEntity<List<Map<String, Object>>> getSignaturesByFormId(@PathVariable String formId) {
+        String sql = "SELECT * FROM SIGNATURES WHERE formID = ?";
+
+        List<Map<String, Object>> signatures = jdbcTemplate.queryForList(sql, formId);
+
+        return new ResponseEntity<>(signatures, HttpStatus.OK);
+    }
+
     // Signform
-    @PostMapping("/{formId}/sign")
+    @PutMapping("/{formId}/sign")
     public ResponseEntity<String> signForm(HttpServletRequest request,
             @PathVariable String formId,
             @RequestBody Map<String, Object> signatureData) {
@@ -315,16 +416,24 @@ public class FormController {
             return new ResponseEntity<>("Invalid signature format. Please provide both first name and last name.",
                     HttpStatus.BAD_REQUEST);
         }
-        String enteredFirstName = nameParts[0];
-        String enteredLastName = nameParts[1];
+        String enteredFirstName = nameParts[0].trim();
+        String enteredLastName = nameParts[1].trim();
         Integer enteredTitleId = signatureData.get("title_id") != null
                 ? Integer.parseInt(signatureData.get("title_id").toString())
                 : null;
 
-        if (!user.get("firstname").equals(enteredFirstName) || !user.get("lastname").equals(enteredLastName)
-                || !user.get("title_id").equals(enteredTitleId)) {
+        if (!user.get("firstname").toString().trim().equals(enteredFirstName) ||
+                !user.get("lastname").toString().trim().equals(enteredLastName) ||
+                !user.get("title_id").equals(enteredTitleId)) {
+            System.out
+                    .println("Debug: Validation failed. Expected firstname=" + user.get("firstname").toString().trim() +
+                            ", lastname=" + user.get("lastname").toString().trim() +
+                            ", title_id=" + user.get("title_id") +
+                            ". Received firstname=" + enteredFirstName +
+                            ", lastname=" + enteredLastName +
+                            ", title_id=" + enteredTitleId);
             return new ResponseEntity<>(
-                    "Signature validation failed: First name, last name, or title ID does not match",
+                    "Signature validation failed: First name, last name, or title ID does not match ",
                     HttpStatus.BAD_REQUEST);
         }
 
@@ -350,23 +459,52 @@ public class FormController {
                     HttpStatus.BAD_REQUEST);
         }
 
-        // Insert the signature
-        String sql = "INSERT INTO SIGNATURES (signature_template_id, formid, username, signature, decided_on, status, rejection_reason, title_id) "
-                +
-                "VALUES (?, ?, ?, ?, ?, CAST(? AS form_status), ?, ?)";
+        String sql = "UPDATE signatures SET " +
+                "status = CAST(? AS form_status), " +
+                "rejection_reason = ?, " +
+                "signature = ?, " +
+                "decided_on = ?, " +
+                "title_id = ? " +
+                "WHERE signatureid = ?";
+
+        Integer signatureId = signatureData.get("signatureid") != null
+                ? Integer.parseInt(signatureData.get("signatureid").toString())
+                : null;
+
+        if (signatureId == null) {
+            return new ResponseEntity<>("signatureid is required for update", HttpStatus.BAD_REQUEST);
+        }
 
         jdbcTemplate.update(sql,
-                signatureTemplateId,
-                formId,
-                username,
-                signature,
-                signatureData.get("decided_on") != null ? LocalDate.parse(signatureData.get("decided_on").toString())
-                        : null,
                 signatureData.get("status"),
                 signatureData.get("rejection_reason"),
-                enteredTitleId);
+                signatureData.get("signature"),
+                signatureData.get("decided_on") != null
+                        ? LocalDate.parse(signatureData.get("decided_on").toString())
+                        : null,
+                signatureData.get("title_id") != null
+                        ? Integer.parseInt(signatureData.get("title_id").toString())
+                        : null,
+                signatureId);
 
-        return new ResponseEntity<>("Signature added successfully", HttpStatus.CREATED);
+        // If the signature is rejected, update the form status to rejected
+        if ("REJECTED".equals(signatureData.get("status"))) {
+            String updateFormStatusSql = "UPDATE FORMS SET status = CAST('REJECTED' AS form_status) WHERE formID = ?";
+            jdbcTemplate.update(updateFormStatusSql, formId);
+        }
+
+        if ("APPROVED".equals(signatureData.get("status"))) {
+            String countSql = "SELECT COUNT(*) FROM signatures WHERE formID = ? AND status != CAST('APPROVED' AS form_status)";
+            Integer pendingOrRejectedCount = jdbcTemplate.queryForObject(countSql, Integer.class, formId);
+
+            if (pendingOrRejectedCount != null && pendingOrRejectedCount == 0) {
+                String updateFormStatusSql = "UPDATE FORMS SET status = CAST('APPROVED' AS form_status) WHERE formID = ?";
+                jdbcTemplate.update(updateFormStatusSql, formId);
+            }
+        }
+
+        return new ResponseEntity<>("Signature updated successfully", HttpStatus.OK);
+
     }
 
     // Add attachment
@@ -375,8 +513,8 @@ public class FormController {
             @PathVariable String formId,
             @RequestBody Map<String, Object> attachmentData) {
         // Expecting file_content as base64 string
-        String sql = "INSERT INTO ATTACHMENTS (formID, attatchment_template_id, file_content) " +
-                "VALUES (?,?, ?)";
+        String sql = "INSERT INTO ATTACHMENTS (formID, attachment_template_id, file_content, mime_type) " +
+                "VALUES (?, ?, ?, ?)";
         byte[] fileContentBytes = null;
         if (attachmentData.get("file_content") != null) {
             try {
@@ -387,34 +525,60 @@ public class FormController {
             }
         }
 
+        String mimeType = (String) attachmentData.get("mime_type");
+
+        // Debug print all parameters
+        System.out.println("Debug: Inserting into ATTACHMENTS with formID=" + formId +
+                ", attachment_template_id=" + attachmentData.get("attachment_template_id") +
+                ", mime_type=" + mimeType);
+
         jdbcTemplate.update(sql,
                 formId,
-                attachmentData.get("attatchment_template_id") != null
-                        ? Integer.parseInt(attachmentData.get("attatchment_template_id").toString())
+                attachmentData.get("attachment_template_id") != null
+                        ? Integer.parseInt(attachmentData.get("attachment_template_id").toString())
                         : null,
-                fileContentBytes);
+                fileContentBytes,
+                mimeType);
 
         return new ResponseEntity<>("Attachment added successfully", HttpStatus.CREATED);
     }
 
-    @GetMapping("/attachments/test-pdf")
-    public ResponseEntity<byte[]> getFirstPdfAttachment() {
-        String sql = "SELECT file_content FROM ATTACHMENTS WHERE file_content IS NOT NULL LIMIT 1";
+    @GetMapping("/attachments/{attachmentId}")
+    public ResponseEntity<byte[]> downloadAttachment(@PathVariable Integer attachmentId) {
+        String sql = "SELECT file_content, mime_type FROM attachments WHERE attachmentid = ?";
 
         try {
-            byte[] pdfBytes = jdbcTemplate.queryForObject(sql, byte[].class);
+            System.out.println("Debug: Fetching attachment with ID: " + attachmentId);
+            Map<String, Object> attachment = jdbcTemplate.queryForMap(sql, attachmentId);
 
-            if (pdfBytes == null || pdfBytes.length == 0) {
-                return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+            byte[] fileContent = (byte[]) attachment.get("file_content");
+            String mimeType = (String) attachment.get("mime_type");
+
+            if (fileContent == null || fileContent.length == 0) {
+                System.out.println("Debug: No attachment found for ID: " + attachmentId);
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
 
+            String fileExtension = mimeType != null ? mimeType.split("/")[1] : "dat";
+            String filename = "attachment." + fileExtension;
+
+            System.out.println("Debug: Attachment found for ID: " + attachmentId + ", MIME type: " + mimeType);
             return ResponseEntity.ok()
-                    .header("Content-Disposition", "inline; filename=\"test.pdf\"")
-                    .header("Content-Type", "application/pdf")
-                    .body(pdfBytes);
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Type", mimeType)
+                    .header("Access-Control-Expose-Headers", "Content-Disposition")
+                    .body(fileContent);
+
         } catch (Exception e) {
+            System.err.println("Error fetching attachment with ID: " + attachmentId + ". Error: " + e.getMessage());
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+    @GetMapping("/test-email")
+    public ResponseEntity<String> testEmail() {
+        System.out.println("Sending test email...");
+        emailService.sendMessage("vuhongson1412@gmail.com", "This is a test email", "This is a test email!");
+        return new ResponseEntity<>("Email sent successfully", HttpStatus.OK);
+    }
 }

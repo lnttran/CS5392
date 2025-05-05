@@ -107,18 +107,19 @@ public class FormTemplateController {
                         if (attachmentTemplates != null) {
                                 for (Map<String, String> at : attachmentTemplates) {
                                         try {
-                                                String attSql = "INSERT INTO ATTACHMENT_TEMPLATES (formTypeID, description, file_type) "
+                                                String attSql = "INSERT INTO ATTACHMENT_TEMPLATES (formTypeID, description, file_type, is_required) "
                                                                 +
-                                                                "VALUES (?, ?, CAST(? AS file_type))";
+                                                                "VALUES (?, ?, CAST(? AS file_type), ?)";
                                                 jdbcTemplate.update(
                                                                 attSql,
                                                                 formTypeId,
                                                                 at.get("description"),
-                                                                at.get("file_type"));
+                                                                at.get("file_type"),
+                                                                at.get("is_required"));
                                         } catch (Exception e) {
                                                 attachmentErrors.add(
                                                                 "Error inserting attachment (fileType: "
-                                                                                + at.get("fileType") + ") - "
+                                                                                + at.get("file_type") + ") - "
                                                                                 + e.getMessage());
                                         }
                                 }
@@ -222,6 +223,51 @@ public class FormTemplateController {
                         return new ResponseEntity<>("Form template updated successfully", HttpStatus.OK);
                 } catch (Exception e) {
                         return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+        }
+
+        @PostMapping("/{formTypeId}/archive")
+        public ResponseEntity<String> archiveFormTemplate(HttpServletRequest request, @PathVariable String formTypeId) {
+                try {
+                        String username = (String) request.getAttribute("username");
+
+                        // Check admin level
+                        String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+                        int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+                        if (level != 4) {
+                                return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
+                        }
+
+                        // Update status to INACTIVE
+                        String sql = "UPDATE FORM_TEMPLATES SET status = 'INACTIVE' WHERE formTypeID = ?";
+                        jdbcTemplate.update(sql, formTypeId);
+
+                        return new ResponseEntity<>("Form template archived successfully", HttpStatus.OK);
+                } catch (Exception e) {
+                        return new ResponseEntity<>("Error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+        }
+
+        @PostMapping("/{formTypeId}/unarchive")
+        public ResponseEntity<String> unarchiveFormTemplate(HttpServletRequest request,
+                        @PathVariable String formTypeId) {
+                try {
+                        String username = (String) request.getAttribute("username");
+
+                        // Check admin level
+                        String sqlLevel = "SELECT level FROM USERS WHERE username = ?";
+                        int level = jdbcTemplate.queryForObject(sqlLevel, Integer.class, username);
+                        if (level != 4) {
+                                return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
+                        }
+
+                        // Update status back to ACTIVE
+                        String sql = "UPDATE FORM_TEMPLATES SET status = 'ACTIVE' WHERE formTypeID = ?";
+                        jdbcTemplate.update(sql, formTypeId);
+
+                        return new ResponseEntity<>("Form template unarchived successfully", HttpStatus.OK);
+                } catch (Exception e) {
+                        return new ResponseEntity<>("Error: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
                 }
         }
 

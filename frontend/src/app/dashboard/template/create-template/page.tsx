@@ -76,6 +76,7 @@ export default function CreateFormTemplate() {
       {
         description: "",
         file_type: "PDF", // default to one valid file_type
+        is_required: true,
       },
     ]);
   };
@@ -161,6 +162,7 @@ export default function CreateFormTemplate() {
       attachmentTemplates: attachments.map((att) => ({
         file_type: att.file_type.toUpperCase(),
         description: att.description,
+        is_required: att.is_required,
       })),
       signatureTemplates: signatures.map((sig) => ({
         title_id: Number(sig.title_id), // ensure it's a number
@@ -184,15 +186,15 @@ export default function CreateFormTemplate() {
         setformtypeid("");
         setFormTitle("");
         setFormDescription("");
-        alert("Form Template created successfully!");
+        toast("Form Template created successfully!");
         router.back();
       } else {
         console.error("Error:", data);
-        alert("Failed to create form template.");
+        toast.error("Failed to create form template.");
       }
     } catch (err) {
       console.error("Submit error:", err);
-      alert("Something went wrong.");
+      toast.error("Something went wrong.");
     }
     // Here you would typically send the form data to your backend
     console.log("Form submitted");
@@ -369,52 +371,77 @@ export default function CreateFormTemplate() {
             {attachments.map((attachment, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-3 border rounded-lg bg-gray-50"
+                className="flex flex-col gap-2 p-3 border rounded-lg bg-gray-50"
               >
-                <div className="flex-1">
-                  <Input
-                    placeholder={`Attachment ${index + 1}`}
-                    value={attachment.description}
-                    onChange={(e) => {
-                      const newAttachments = [...attachments];
-                      newAttachments[index].description = e.target.value;
-                      setAttachments(newAttachments);
-                    }}
-                  />
-                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder={`Attachment ${index + 1}`}
+                      value={attachment.description}
+                      onChange={(e) => {
+                        const newAttachments = [...attachments];
+                        newAttachments[index].description = e.target.value;
+                        setAttachments(newAttachments);
+                      }}
+                    />
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm whitespace-nowrap">
-                    Allowed Types:
-                  </Label>
-                  <Select
-                    value={attachment.file_type}
-                    onValueChange={(value) => {
-                      const newAttachments = [...attachments];
-                      newAttachments[index].file_type = value as FileType;
-                      setAttachments(newAttachments);
-                    }}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">
+                      Allowed Types:
+                    </Label>
+                    <Select
+                      value={attachment.file_type}
+                      onValueChange={(value) => {
+                        const newAttachments = [...attachments];
+                        newAttachments[index].file_type = value as FileType;
+                        setAttachments(newAttachments);
+                      }}
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Select types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PDF">PDF</SelectItem>
+                        <SelectItem value="DOC">DOC</SelectItem>
+                        <SelectItem value="JPG">JPG</SelectItem>
+                        <SelectItem value="PNG">PNG</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">
+                      Required:
+                    </Label>
+                    <Select
+                      value={attachment.is_required ? "yes" : "no"}
+                      onValueChange={(value) => {
+                        const newAttachments = [...attachments];
+                        newAttachments[index].is_required = value === "yes";
+                        setAttachments(newAttachments);
+                      }}
+                    >
+                      <SelectTrigger className="w-[80px]">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeAttachment(index)}
+                    className="h-9 w-9"
                   >
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="Select types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PDF">PDF</SelectItem>
-                      <SelectItem value="DOC">DOC</SelectItem>
-                      <SelectItem value="JPG">JPG</SelectItem>
-                      <SelectItem value="PNG">PNG</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Trash className="h-4 w-4 text-red-500" />
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeAttachment(index)}
-                  className="h-9 w-9"
-                >
-                  <Trash className="h-4 w-4 text-red-500" />
-                </Button>
               </div>
             ))}
             <Button

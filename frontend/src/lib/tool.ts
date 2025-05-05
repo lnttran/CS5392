@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { JSX, useEffect, useState } from "react";
 import { fetchWithAuth } from "./fetch";
+import { BadgeProps } from "@/components/ui/badge";
 
 export async function fetchTitleById(titleId: string): Promise<string | null> {
   try {

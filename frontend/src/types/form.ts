@@ -1,4 +1,63 @@
 import { fetchWithAuth } from "@/lib/fetch";
+import { AttachmentTemplateJS, FormStatus } from "./template";
+
+export interface Form {
+  created_date: string;
+  description: string;
+  formid: string;
+  formtypeid: string;
+  last_updated: string;
+  status: string;
+  title: string;
+  username: string;
+  next_signer_level: string;
+}
+
+export interface Attachment {
+  attachment_template_id: string;
+  attachmentid: number;
+  file_content: string;
+  formid: string;
+}
+
+export interface Content {
+  content_id: number;
+  content_template_id: number;
+  field_value: string;
+  formid: string;
+}
+
+export interface Signature {
+  decided_on: string | null;
+  formid: string;
+  rejection_reason: string | null;
+  signature: string | null;
+  signature_template_id: number;
+  signatureid: number;
+  status: FormStatus;
+  title_id: number | null;
+  username: string;
+}
+
+export interface SignApplication {
+  signature_template_id: number;
+  signatureid: number;
+  decided_on: string;
+  signature: string;
+  rejection_reason: string | null;
+  status: FormStatus;
+  title_id: string;
+}
+
+export interface FormDetails extends Form {
+  contents: Content[];
+  signatures: Signature[];
+  attachments: Attachment[];
+}
+
+export interface FormWithSignatureStatus extends Form {
+  signature_status: FormStatus;
+}
 
 export async function generateUniqueApplicationId(
   formtypeid: string
