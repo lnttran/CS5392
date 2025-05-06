@@ -204,92 +204,98 @@ export default function UsersPage() {
         </div>
         <div className="flex-1">
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead
-                    className="w-[200px] cursor-pointer"
-                    onClick={() => handleSort("username")}
-                  >
-                    <div className="flex items-center">
-                      Username {getSortIcon("username")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-[300px] cursor-pointer"
-                    onClick={() => handleSort("firstname")}
-                  >
-                    <div className="flex items-center">
-                      Name {getSortIcon("firstname")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="min-w-[200px] cursor-pointer"
-                    onClick={() => handleSort("email")}
-                  >
-                    <div className="flex items-center">
-                      Email {getSortIcon("email")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-[200px] cursor-pointer"
-                    onClick={() => handleSort("level")}
-                  >
-                    <div className="flex items-center">
-                      Level {getSortIcon("level")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-[300px] cursor-pointer"
-                    onClick={() => handleSort("title")}
-                  >
-                    <div className="flex items-center">
-                      Title {getSortIcon("title")}
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.username}>
-                    <TableCell className="font-medium">
-                      {user.username}
-                    </TableCell>
-                    <TableCell>{`${user.firstname} ${user.lastname}`}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={`bg-[#${userLevels[user.level].color}] hover:bg-[${userLevels[user.level].color}]`}
-                      >
-                        Level {userLevels[user.level].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{user.title}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Actions</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {/* <DropdownMenuItem>Edit</DropdownMenuItem> */}
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => deleteUser(user.username)}
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+            <div className="relative">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead
+                      className="w-[200px] cursor-pointer"
+                      onClick={() => handleSort("username")}
+                    >
+                      <div className="flex items-center">
+                        Username {getSortIcon("username")}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="w-[300px] cursor-pointer"
+                      onClick={() => handleSort("firstname")}
+                    >
+                      <div className="flex items-center">
+                        Name {getSortIcon("firstname")}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="min-w-[200px] cursor-pointer"
+                      onClick={() => handleSort("email")}
+                    >
+                      <div className="flex items-center">
+                        Email {getSortIcon("email")}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="w-[200px] cursor-pointer"
+                      onClick={() => handleSort("level")}
+                    >
+                      <div className="flex items-center">
+                        Level {getSortIcon("level")}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="w-[300px] cursor-pointer"
+                      onClick={() => handleSort("title")}
+                    >
+                      <div className="flex items-center">
+                        Title {getSortIcon("title")}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+              </Table>
+              <div className="overflow-y-auto max-h-[70vh]">
+                <Table>
+                  <TableBody>
+                    {filteredUsers.map((user) => (
+                      <TableRow key={user.username}>
+                        <TableCell className="font-medium">
+                          {user.username}
+                        </TableCell>
+                        <TableCell>{`${user.firstname} ${user.lastname}`}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={`bg-[#${userLevels[user.level].color}] hover:bg-[${userLevels[user.level].color}]`}
+                          >
+                            Level {userLevels[user.level].label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{user.title}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {/* <DropdownMenuItem>Edit</DropdownMenuItem> */}
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => deleteUser(user.username)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
         </div>
       </div>

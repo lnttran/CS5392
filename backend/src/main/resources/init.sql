@@ -28,7 +28,7 @@ CREATE TYPE file_type AS ENUM ('PDF', 'DOC', 'JPG', 'PNG');
 -- Create base tables (no foreign keys yet)
 CREATE TABLE IF NOT EXISTS user_titles (
     title_id SERIAL PRIMARY KEY,
-    title VARCHAR NOT NULL UNIQUE,
+    title VARCHAR NOT NULL UNIQUE
 );
 CREATE TABLE IF NOT EXISTS users (
     username VARCHAR PRIMARY KEY,
@@ -154,8 +154,7 @@ VALUES (
         'Tran',
         'Lam',
         4,
-        'admin@example
-.com'
+        'admin@example.com'
     );
 INSERT INTO credentials (username, password, login_first_time)
 VALUES (

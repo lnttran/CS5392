@@ -108,20 +108,20 @@ export function Signup({
 
     while (!isUnique) {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user/check-username/${username}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/check-username/${username}`,
         {
           method: "GET",
           credentials: "include",
         }
       );
       const data = await response.json();
+      console.log(data, "if username exists");
 
       if (!data) {
         isUnique = true;
       } else {
         attempt++;
-        const randomNumber = Math.floor(10 + Math.random() * 90);
-        username = `${firstName[0]}${lastName}${randomNumber}`.toLowerCase();
+        username = `${firstName[0]}${lastName}${attempt}`.toLowerCase();
       }
 
       if (attempt > 10) break;
